@@ -1,0 +1,3 @@
+[submodule "gnn"]
+	path = gnn
+	url = git@github.com:aledima00/sldm-gnn.git
