@@ -1,6 +1,6 @@
 {
-    "name": "cpp-dev",
-    "image": "mylib/sldm_image:latest",
+    "name": "sldm-devcontainer",
+    "image": "mylib/sldm-devcont-img",
     "workspaceFolder": "/work",
     "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
     "customizations": {
@@ -10,5 +10,6 @@
                 "ms-vscode.cmake-tools"
             ]
         }
-    }
+    },
+    "shutdownAction": "stopContainer"
 }
