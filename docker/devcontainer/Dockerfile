@@ -42,11 +42,8 @@ RUN cd qpid-proton-0.35.0 && \
 
 USER sldm
 
-# install uv as user and syncs gnn repo
-RUN (curl -LsSf https://astral.sh/uv/install.sh | sh) && \
-    . $HOME/.local/bin/env && \
-    cd /home/sldm/SLDM/sldm-gnn && \
-    . ./install_dependencies.sh
+# install uv as user
+RUN (curl -LsSf https://astral.sh/uv/install.sh | sh)
 
 
 # EXPOSE 5671 5672 8161
