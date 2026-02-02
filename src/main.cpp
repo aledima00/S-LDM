@@ -13,6 +13,7 @@
 #include "JSONserver.h"
 #include "utils.h"
 #include "timers.h"
+#include "frameBuffer.h"
 
 extern "C" {
 	#include "options.h"
@@ -123,7 +124,8 @@ typedef struct vizOptions {
 
 typedef struct nnModelUpdaterOptions {
 	ldmmap::LDMMap *db_ptr;
-	u_int16_t period_ms;
+	uint16_t period_ms;
+	uint16_t max_frame_size;
 	// other communication config parameters...
 } nnModelUpdaterOptions_t;
 
@@ -249,6 +251,13 @@ void *VehVizUpdater_callback(void *arg) {
 	pthread_exit(nullptr);
 }
 
+
+void addVdToFrame(ldmmap::vehicleData_t vehdata, void *fbVoidPtr) {
+	FrameBuffer *fbPtr = static_cast<FrameBuffer *>(fbVoidPtr);
+	// TODO: filter by timestamp -> last frame only, 1 per vehicle
+	fbPtr->add(&vehdata);
+}
+
 void *nnModelUpdater_callback(void* arg) {
 	// This function should periodically read from the database and update the neural network model
 
@@ -276,6 +285,9 @@ void *nnModelUpdater_callback(void* arg) {
 		}
 	}
 
+	// create frame object
+	FrameBuffer frameBuf(fifofd, opts->max_frame_size, opts->db_ptr->getCentralLatLon().second, 0.9996);
+	// #TODO: decide k0, or if make it configurable
 
 	// Create a new timer
 	Timer tmr(opts->period_ms);
@@ -294,9 +306,14 @@ void *nnModelUpdater_callback(void* arg) {
 		// Implement the logic to read from the database and update the neural network model
 		// ---- These operations will be performed periodically ----
 		// Placeholder: print a message indicating the update operation
-		const char* msg = "CIAO";
-		write(fifofd, msg, strlen(msg));
+		db_ptr->executeOnAllVehicleContents(&addVdToFrame, static_cast<void *>(&frameBuf));
+		frameBuf.flushToFd();
 		// --------
+	}
+
+	if (!frameBuf.empty()) {
+		// #TODO:CHECK this, and in general handle fail conditions
+		frameBuf.flushToFd();
 	}
 
 	if (terminatorFlag == true) {
@@ -527,7 +544,8 @@ int main(int argc, char **argv) {
 	// pthread_attr_destroy(&tattr);
 
 	// third thread to read periodically from db and update python nn model
-	nnModelUpdaterOptions_t nnMUP = {db_ptr, 100};
+	nnModelUpdaterOptions_t nnMUP = {db_ptr, 100, 2000}; // every 100 ms, max frame size 2000 vehicles
+	// #TODO: decide how to configure period and frame size options
 	pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
 
 	// Get the log file name from the options, if available, to enable log mode inside the AMQP client and the S-LDM modules
