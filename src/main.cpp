@@ -255,12 +255,35 @@ void *nnModelUpdater_callback(void* arg) {
 	nnModelUpdaterOptions_t* opts = static_cast<nnModelUpdaterOptions_t*>(arg);
 	ldmmap::LDMMap* db_ptr = opts->db_ptr;
 
+	// create fifo pipe with mkfifo
+	int fifofd=-1;
+	std::string fifo_path = "/tmp/nn_mup_fifo" + std::to_string(getpid());
+	if (mkfifo(fifo_path.c_str(), 0660) < 0){
+		std::cerr << "[ERROR] Cannot create FIFO pipe for Neural Network Model Updater!" << std::endl;
+		terminatorFlag = true;
+		pthread_exit(nullptr);
+	}
+	else{
+		std::cout << "[INFO] FIFO pipe created at " << fifo_path << " for Neural Network Model Updater." << std::endl;
+		// open fifo for writing
+		fifofd = open(fifo_path.c_str(), O_RDWR | O_NONBLOCK);
+		if (fifofd < 0) {
+			std::cerr << "[ERROR] Cannot open FIFO pipe for Neural Network Model Updater!" << std::endl;
+			// created but can't open, so unlink it
+			unlink(fifo_path.c_str());
+			terminatorFlag = true;
+			pthread_exit(nullptr);
+		}
+	}
+
+
 	// Create a new timer
 	Timer tmr(opts->period_ms);
 	std::cout << "[INFO] Neural Network Model Updater started. Updating every " << opts->period_ms << " milliseconds." << std::endl;
 
 	if(tmr.start()==false) {
 		std::cerr << "[ERROR] Fatal error! Cannot create timer for the Neural Network Model Updater thread!" << std::endl;
+		unlink(fifo_path.c_str());
 		terminatorFlag = true;
 		pthread_exit(nullptr);
 	}
@@ -271,14 +294,16 @@ void *nnModelUpdater_callback(void* arg) {
 		// Implement the logic to read from the database and update the neural network model
 		// ---- These operations will be performed periodically ----
 		// Placeholder: print a message indicating the update operation
-		std::cout << "[INFO] Neural Network Model Updater is updating the model..." << std::endl;
+		const char* msg = "CIAO";
+		write(fifofd, msg, strlen(msg));
 		// --------
 	}
 
 	if (terminatorFlag == true) {
 		std::cerr << "[WARN] Neural Network Model Updater terminated due to error." << std::endl;
 	}
-
+	close(fifofd);
+	unlink(fifo_path.c_str());
 	pthread_exit(nullptr);
 }
 
