@@ -121,6 +121,12 @@ typedef struct vizOptions {
 	options_t *opts_ptr;
 } vizOptions_t;
 
+typedef struct nnModelUpdaterOptions {
+	ldmmap::LDMMap *db_ptr;
+	u_int16_t period_ms;
+	// other communication config parameters...
+} nnModelUpdaterOptions_t;
+
 void clearVisualizerObject(uint64_t id,void *vizObjVoidPtr) {
 	vehicleVisualizer *vizObjPtr = static_cast<vehicleVisualizer *>(vizObjVoidPtr);
 
@@ -243,6 +249,39 @@ void *VehVizUpdater_callback(void *arg) {
 	pthread_exit(nullptr);
 }
 
+void *nnModelUpdater_callback(void* arg) {
+	// This function should periodically read from the database and update the neural network model
+
+	nnModelUpdaterOptions_t* opts = static_cast<nnModelUpdaterOptions_t*>(arg);
+	ldmmap::LDMMap* db_ptr = opts->db_ptr;
+
+	// Create a new timer
+	Timer tmr(opts->period_ms);
+	std::cout << "[INFO] Neural Network Model Updater started. Updating every " << opts->period_ms << " milliseconds." << std::endl;
+
+	if(tmr.start()==false) {
+		std::cerr << "[ERROR] Fatal error! Cannot create timer for the Neural Network Model Updater thread!" << std::endl;
+		terminatorFlag = true;
+		pthread_exit(nullptr);
+	}
+
+	POLL_DEFINE_JUNK_VARIABLE();
+
+	while (terminatorFlag == false && tmr.waitForExpiration()==true) {
+		// Implement the logic to read from the database and update the neural network model
+		// ---- These operations will be performed periodically ----
+		// Placeholder: print a message indicating the update operation
+		std::cout << "[INFO] Neural Network Model Updater is updating the model..." << std::endl;
+		// --------
+	}
+
+	if (terminatorFlag == true) {
+		std::cerr << "[WARN] Neural Network Model Updater terminated due to error." << std::endl;
+	}
+
+	pthread_exit(nullptr);
+}
+
 int main(int argc, char **argv) {
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	terminatorFlag = false;
@@ -253,6 +292,9 @@ int main(int argc, char **argv) {
 	pthread_t vehviz_tid;
 	// Thread attributes (unused, for the time being)
 	// pthread_attr_t tattr;
+
+	pthread_t nn_updater_tid;
+	// thread periodically reading from db and updating nn model
 
 	// First of all, parse the options
 	options_t sldm_opts;
@@ -459,6 +501,10 @@ int main(int argc, char **argv) {
 	pthread_create(&vehviz_tid,NULL,VehVizUpdater_callback,(void *) &vizParams);
 	// pthread_attr_destroy(&tattr);
 
+	// third thread to read periodically from db and update python nn model
+	nnModelUpdaterOptions_t nnMUP = {db_ptr, 100};
+	pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
+
 	// Get the log file name from the options, if available, to enable log mode inside the AMQP client and the S-LDM modules
 	std::string logfile_name="";
 	if(options_string_len(sldm_opts.logfile_name)>0) {
@@ -612,6 +658,7 @@ int main(int argc, char **argv) {
 
 	pthread_join(dbcleaner_tid,nullptr);
 	pthread_join(vehviz_tid,nullptr);
+	pthread_join(nn_updater_tid,nullptr);
 
 	if(sldm_opts.num_amqp_x_enabled>0) {
 		fprintf(stdout,"[INFO] Terminating the other AMQP clients...\n");
