@@ -3,6 +3,7 @@
     "image": "mylib/sldm-devcont-img",
     "workspaceFolder": "/work",
     "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
+    "runArgs": ["--network=host"],
     "customizations": {
         "vscode": {
             "extensions": [
