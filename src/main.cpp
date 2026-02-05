@@ -307,13 +307,13 @@ void *nnModelUpdater_callback(void* arg) {
 		// ---- These operations will be performed periodically ----
 		// Placeholder: print a message indicating the update operation
 		db_ptr->executeOnAllVehicleContents(&addVdToFrame, static_cast<void *>(&frameBuf));
-		frameBuf.flushToFd();
+		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
 		// --------
 	}
 
 	if (!frameBuf.empty()) {
 		// #TODO:CHECK this, and in general handle fail conditions
-		frameBuf.flushToFd();
+		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
 	}
 
 	if (terminatorFlag == true) {
