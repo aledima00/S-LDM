@@ -258,6 +258,25 @@ void addVdToFrame(ldmmap::vehicleData_t vehdata, void *fbVoidPtr) {
 	fbPtr->add(&vehdata);
 }
 
+void randomFillFrameBuffer(FrameBuffer* fbPtr, int num_vehicles){
+	FrameBuffer::vehicleSnapshot_t vs;
+	vs.stationID = 1001;
+	vs.width = 1.8;
+	vs.length = 4.5;
+	vs.stationType = ldmmap::e_StationTypeLDM::StationType_LDM_passengerCar;
+	vs.x = 1.1;
+	vs.y = 2.2;
+	vs.speed = 10.0;
+	vs.heading = 45.0;
+	for(int i=0;i<num_vehicles;i++){
+		fbPtr->addCustom(&vs);
+		vs.stationID++;
+		vs.x += 0.1;
+		vs.y += 0.1;
+		vs.heading += 0.5;
+	}
+}
+
 void *nnModelUpdater_callback(void* arg) {
 	// This function should periodically read from the database and update the neural network model
 
