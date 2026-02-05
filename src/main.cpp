@@ -25,6 +25,11 @@ extern "C" {
 
 #define DB_CLEANER_INTERVAL_SECONDS 1
 #define DB_DELETE_OLDER_THAN_SECONDS 1 // This value should NEVER be set greater than (5-DB_CLEANER_INTERVAL_SECONDS/60) minutes or (300-DB_CLEANER_INTERVAL_SECONDS) seconds - doing so may break the database age check functionality!
+#define GREEN_ESCAPE "\033[32m"
+#define YELLOW_ESCAPE "\033[33m"
+#define RED_ESCAPE "\033[31m"
+#define RESET_ESCAPE "\033[0m"
+
 
 // Global atomic flag to terminate all the threads in case of errors
 std::atomic<bool> terminatorFlag;
@@ -292,7 +297,7 @@ void *nnModelUpdater_callback(void* arg) {
 		pthread_exit(nullptr);
 	}
 	else{
-		std::cout << "[INFO] FIFO pipe created at " << fifo_path << " for Neural Network Model Updater." << std::endl;
+		std::cout << "[INFO] FIFO pipe created at " << GREEN_ESCAPE << fifo_path << RESET_ESCAPE << " for Neural Network Model Updater." << std::endl;
 		// open fifo for writing
 		fifofd = open(fifo_path.c_str(), O_RDWR | O_NONBLOCK);
 		if (fifofd < 0) {
