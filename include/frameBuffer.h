@@ -6,6 +6,10 @@
 // Class that stores a map frame snapshot by accumulating multiple vehicle data entries, then allowing to serialize them as a block
 class FrameBuffer {
     public:
+        typedef enum {
+            binary=0,
+            json=1,
+        } serialization_t;
 
         // basic block: vehicle snapshot
         typedef struct {
@@ -31,7 +35,8 @@ class FrameBuffer {
         uint16_t getMaxSize();
 
         bool add(ldmmap::vehicleData_t *vd);
-        void flushToFd();
+        bool addCustom(vehicleSnapshot_t* vs);
+        void flushToFd(serialization_t serType);
         // #TODO:CHECK if add here filtering on time and veh uniqueness or in main add looped function
         bool empty();
     private:
