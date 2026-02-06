@@ -80,14 +80,14 @@ void FrameBuffer::flushToFd(serialization_t serType) {
                 const auto& v = _data[i];
 
                 ss << "{"
-                << "\"stationID\":" << v.stationID << ","
+                << "\"VehicleId\":" << v.stationID << ","
                 << "\"width\":" << std::fixed << std::setprecision(3) << v.width << ","
                 << "\"length\":" << std::fixed << std::setprecision(3) << v.length << ","
-                << "\"stationType\":" << static_cast<int>(v.stationType) << ","
-                << "\"x\":" << std::fixed << std::setprecision(6) << v.x << ","
-                << "\"y\":" << std::fixed << std::setprecision(6) << v.y << ","
-                << "\"speed\":" << std::fixed << std::setprecision(6) << v.speed << ","
-                << "\"heading\":" << std::fixed << std::setprecision(6) << v.heading
+                << "\"stType\":" << static_cast<int>(v.stationType) << ","
+                << "\"X\":" << std::fixed << std::setprecision(6) << v.x << ","
+                << "\"Y\":" << std::fixed << std::setprecision(6) << v.y << ","
+                << "\"Speed\":" << std::fixed << std::setprecision(6) << v.speed << ","
+                << "\"Angle\":" << std::fixed << std::setprecision(6) << v.heading
                 << "}";
 
                 if (i != _idx - 1)
