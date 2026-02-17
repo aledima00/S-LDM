@@ -40,6 +40,6 @@ RUN wget -q https://dlcdn.apache.org/activemq/${ACTIVEMQ_VERSION}/apache-activem
 # set access to 0.0.0.0
 RUN sed -i 's/<property name="host" value="127.0.0.1"\/>/<property name="host" value="0.0.0.0"\/>/' ${ACTIVEMQ_HOME}/conf/jetty.xml
 
-EXPOSE 8161 5672
+EXPOSE 8161 61616 5672 61613 5867
 
 CMD ["/home/activemquser/.activemq/bin/activemq", "console"]

@@ -1,4 +1,4 @@
 [submodule "gnn"]
 	path = gnn
 	url = https://github.com/aledima00/sldm-gnn.git
-	branch = mkfifo
+	branch = cleaning
