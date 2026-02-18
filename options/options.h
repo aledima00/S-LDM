@@ -198,6 +198,7 @@ typedef struct options {
 
 	bool indicatorTrgMan_enabled; // 'true' if the turn indicator trigger manager is enabled (default option), 'false' otherwise
 	bool MBDetector_enabled; // 'true' if the Misbehaviour Detection service is enabled, 'false' otherwise
+	options_string gnn_snapshot_path; // Path of the gnn snapshot file (.pth) used to configure the model and load state dicts.
 
 	bool ageCheck_enabled; // (-g option to set this to 'false') 'true' if an 'age check' on the received data should be performed before updating the database, 'false' otherwise. Default: 'true'.
 	bool quadkFilter_enabled; // 'true' if the QuadKey filter is enabled (messages are pre-filtered by the AMQP broker depending on the Quadkey property), 'false' otherwise (default: 'true' - it must be explicitly disabled, if needed)

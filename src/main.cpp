@@ -4,6 +4,10 @@
 #include <condition_variable>
 #include <thread>
 #include <time.h>
+#include <vector>
+#include <string>
+#include <sys/wait.h>
+#include <spawn.h>
 #include "curl/curl.h"
 
 #include "LDMmap.h"
@@ -131,6 +135,9 @@ typedef struct nnModelUpdaterOptions {
 	ldmmap::LDMMap *db_ptr;
 	uint16_t period_ms;
 	uint16_t max_frame_size;
+	uint16_t pack_size;
+	uint16_t stride;
+	char *gnn_snapshot_path;
 	// other communication config parameters...
 } nnModelUpdaterOptions_t;
 
@@ -282,6 +289,65 @@ void randomFillFrameBuffer(FrameBuffer* fbPtr, int num_vehicles){
 	}
 }
 
+extern char **environ;
+pid_t uv_spawn_gnn(char *fifo_path, uint16_t pack_size, uint16_t stride, char *gnn_snapshot_path) {
+	posix_spawn_file_actions_t fa;
+	posix_spawn_file_actions_init(&fa);
+
+	// ========= change working directory to gnn
+	int rc = posix_spawn_file_actions_addchdir_np(&fa, "gnn");
+	if (rc != 0) {
+        posix_spawn_file_actions_destroy(&fa);
+        return -1;
+    }
+
+	// ========= prepare arguments vector
+	std::vector<char*> argv;
+
+	// -- push back macros while transforming to char*
+	#define PB(strname) argv.push_back(strname);
+	#define PBC(strname,strval) char strname[] = strval; argv.push_back(strname);
+	#define PBCI(val,sz) char cstr_##val[sz]; sprintf(cstr_##val,"%d",val); PB(cstr_##val);
+
+	// -- push back the arguments
+    PBC(uv,"uv");
+	PBC(run,"run");
+	PBC(rcv_py_path,"rcv.py");
+	PBC(opt_f,"-f");
+	PB(fifo_path);
+	PBC(opt_p,"-p");
+	PBCI(pack_size,5);
+	PBC(opt_s,"--stride");
+	PBCI(stride,5);
+	PBC(opt_w,"-s");
+	PB(gnn_snapshot_path);
+    PB(nullptr);
+
+
+	// ========= spawn the process
+	pid_t pid;
+    rc = posix_spawnp(
+        &pid,
+        "uv",
+        &fa,   // file actions
+        nullptr,   // spawn attrs
+        argv.data(),
+        environ
+    );
+
+	// ========= cleanup & error check
+	posix_spawn_file_actions_destroy(&fa);
+    if (rc != 0) {
+        // errno-style error check
+        return -1;
+    }
+
+    return pid;
+	#undef PB
+	#undef PBC
+	#undef PBCI
+}
+
 void *nnModelUpdater_callback(void* arg) {
 	// This function should periodically read from the database and update the neural network model
 
@@ -307,6 +373,20 @@ void *nnModelUpdater_callback(void* arg) {
 			terminatorFlag = true;
 			pthread_exit(nullptr);
 		}
+	}
+
+	// spawn the gnn model and attach it to the pipe
+	std::string gnn_relative_snapshot_path = std::string("../") + opts->gnn_snapshot_path;
+	pid_t pygnn_pid = uv_spawn_gnn(const_cast<char*>(fifo_path.c_str()), opts->pack_size, opts->stride, const_cast<char*>(gnn_relative_snapshot_path.c_str()));
+	if (pygnn_pid < 0) {
+		std::cerr << "[ERROR] Cannot spawn the GNN model process for Neural Network Model Updater!" << std::endl;
+		close(fifofd);
+		unlink(fifo_path.c_str());
+		terminatorFlag = true;
+		pthread_exit(nullptr);
+	}
+	else {
+		std::cout << "[INFO] Spawned GNN model process with PID " << GREEN_ESCAPE << pygnn_pid << RESET_ESCAPE << " for Neural Network Model Updater." << std::endl;
 	}
 
 	// create frame object
@@ -568,7 +648,10 @@ int main(int argc, char **argv) {
 	// pthread_attr_destroy(&tattr);
 
 	// third thread to read periodically from db and update python nn model
-	nnModelUpdaterOptions_t nnMUP = {db_ptr, 100, 2000}; // every 100 ms, max frame size 2000 vehicles
+	char *gnn_snapshot_path=nullptr;
+	if(options_string_len(sldm_opts.gnn_snapshot_path)>0)
+		gnn_snapshot_path=options_string_pop(sldm_opts.gnn_snapshot_path);
+	nnModelUpdaterOptions_t nnMUP = {db_ptr, 100, 2000, 100, 1, gnn_snapshot_path}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
 	// #TODO: decide how to configure period and frame size options
 	pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
 
