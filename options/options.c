@@ -54,6 +54,10 @@
 #define LONGOPT_enable_interop_hijack "enable-interop-hijack"
 #define LONGOPT_disable_misbehaviour_detector "disable-misbehaviour-detector"
 #define LONGOPT_gnn_snapshot_path "gnn-snapshot-path"
+#define LONGOPT_gnn_step_len "gnn-step-len"
+#define LONGOPT_gnn_pack_size "gnn-pack-size"
+#define LONGOPT_gnn_stride "gnn-stride"
+#define LONGOPT_gnn_triggering_threshold "gnn-triggering-threshold"
 // The corresponding "val"s are used internally and they should be set as sequential integers starting from 256 (the range 320-399 should not be used as it is reserved to the AMQP broker long options)
 #define LONGOPT_vehviz_update_interval_sec_val 256
 #define LONGOPT_indicator_trgman_disable_val 257
@@ -67,6 +71,10 @@
 #define LONGOPT_enable_interop_hijack_val 265
 #define LONGOPT_disable_misbehaviour_detector_val 266
 #define LONGOPT_gnn_snapshot_path_val 267
+#define LONGOPT_gnn_step_len_val 268
+#define LONGOPT_gnn_pack_size_val 269
+#define LONGOPT_gnn_stride_val 270
+#define LONGOPT_gnn_triggering_threshold_val 271
 
 // AMQP broker (additional)
 #define LONGOPT_amqp_enable_additionals "amqp-enable-additionals"
@@ -134,6 +142,10 @@ static const struct option long_opts[]={
 	{LONGOPT_enable_interop_hijack,			no_argument,		NULL, LONGOPT_enable_interop_hijack_val},
 	{LONGOPT_disable_misbehaviour_detector,			no_argument,		NULL, LONGOPT_disable_misbehaviour_detector_val},
 	{LONGOPT_gnn_snapshot_path,				required_argument,	NULL, LONGOPT_gnn_snapshot_path_val},
+	{LONGOPT_gnn_step_len,				required_argument,	NULL, LONGOPT_gnn_step_len_val},
+	{LONGOPT_gnn_pack_size,				required_argument,	NULL, LONGOPT_gnn_pack_size_val},
+	{LONGOPT_gnn_stride,				required_argument,	NULL, LONGOPT_gnn_stride_val},
+	{LONGOPT_gnn_triggering_threshold,				required_argument,	NULL, LONGOPT_gnn_triggering_threshold_val},
 
 	// Additional AMQP clients options
 	{LONGOPT_amqp_enable_additionals,					required_argument,		NULL, LONGOPT_amqp_enable_additionals_val},
@@ -357,6 +369,23 @@ static const struct option long_opts[]={
 #define OPT_gnn_snapshot_path \
 	"  --"LONGOPT_gnn_snapshot_path": <path relative to cwd>: path of the gnn snapshot file (.pth) used to configure the model and load state dicts.\n"
 
+#define OPT_gnn_step_len \
+	"  --"LONGOPT_gnn_step_len": <integer>: temporal distance, in ms, between consecutive frames used in the gnn model.\n"\
+	"\t  In the SLDM, this basically changes the period of capture of frames, and consequent forward to the gnn model.\n"\
+	"\t  It must be greater or equal than 1ms; default is "STRINGIFY(DEFAULT_GNN_STEP_LEN_MS)"ms (i.e. frames are captured and sent to the gnn model every "STRINGIFY(DEFAULT_GNN_STEP_LEN_MS)"ms).\n"
+
+#define OPT_gnn_pack_size \
+	"  --"LONGOPT_gnn_pack_size": <integer>: number of frames to pack together for each inference of the GNN model.\n"\
+	"\t  It must be greater or equal than 1 frame; default is "STRINGIFY(DEFAULT_GNN_PACK_SIZE)" (i.e. each sequence inferred is "STRINGIFY(DEFAULT_GNN_PACK_SIZE)" frames long).\n"
+
+#define OPT_gnn_stride \
+	"  --"LONGOPT_gnn_stride": <integer>: stride = number of frames popped up from the gnn model between two consecutive inferences.\n"\
+	"\t  It must be greater or equal than 1 frame; default is "STRINGIFY(DEFAULT_GNN_STRIDE)" (i.e. after each inference only discards first "STRINGIFY(DEFAULT_GNN_STRIDE)" frame, and only "STRINGIFY(DEFAULT_GNN_STRIDE)" more frame enters as last).\n"
+
+#define OPT_gnn_triggering_threshold \
+	"  --"LONGOPT_gnn_triggering_threshold": <floating point number>: threshold used to determine whether to interpret output logits of the gnn models as triggers.\n"\
+	"\t  It must be between 0 and 1; default is "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)" (i.e. a logit is interpreted as a trigger if it is >= "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)", otherwise it is not a trigger).\n"
+
 static void print_long_info(char *argv0) {
 	fprintf(stdout,"\nUsage: %s [-A S-LDM coverage internal area] [options]\n"
 		"%s [-h | --"LONGOPT_h"]: print help and show options\n"
@@ -397,6 +426,10 @@ static void print_long_info(char *argv0) {
 		OPT_brokers_enable_description
 		OPT_disable_misbehaviour_detector
 		OPT_gnn_snapshot_path
+		OPT_gnn_step_len
+		OPT_gnn_pack_size
+		OPT_gnn_stride
+		OPT_gnn_triggering_threshold
 		,
 		argv0,argv0,argv0);
 
@@ -495,6 +528,10 @@ void options_initialize(struct options *options) {
 	options->od_json_interface_port=DEFAULT_OD_JSON_OVER_TCP_INTERFACE_PORT;
 
 	options->gnn_snapshot_path=options_string_declare();
+	options->gnn_step_len_ms=DEFAULT_GNN_STEP_LEN_MS;
+	options->gnn_pack_size=DEFAULT_GNN_PACK_SIZE;
+	options->gnn_stride=DEFAULT_GNN_STRIDE;
+	options->gnn_triggering_threshold=DEFAULT_GNN_TRIGGERING_THRESHOLD;
 }
 
 unsigned int parse_options(int argc, char **argv, struct options *options) {
@@ -780,6 +817,58 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 			case LONGOPT_gnn_snapshot_path_val:
 				if(!options_string_push(&(options->gnn_snapshot_path),optarg)) {
 					fprintf(stderr,"Error in parsing the gnn snapshot path: %s.\n",optarg);
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case LONGOPT_gnn_step_len_val:
+				errno=0; // Setting errno to 0 as suggested in the strtoul() man page
+				options->gnn_step_len_ms=strtoul(optarg,&sPtr,10);
+
+				if(sPtr==optarg) {
+					fprintf(stderr,"Cannot find any digit in the specified value (--" LONGOPT_gnn_step_len ").\n");
+					print_short_info_err(options,argv[0]);
+				} else if(errno || options->gnn_step_len_ms<1) {
+					fprintf(stderr,"Error in parsing the step length for the GNN model. Remember that it must be within [100,10000] milliseconds.\n");
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case LONGOPT_gnn_pack_size_val:
+				errno=0; // Setting errno to 0 as suggested in the strtoul() man page
+				options->gnn_pack_size=strtoul(optarg,&sPtr,10);
+
+				if(sPtr==optarg) {
+					fprintf(stderr,"Cannot find any digit in the specified value (--" LONGOPT_gnn_pack_size ").\n");
+					print_short_info_err(options,argv[0]);
+				} else if(errno || options->gnn_pack_size<1) {
+					fprintf(stderr,"Error in parsing the pack size for the GNN model. Remember that it must be within [1,10000] frames.\n");
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case LONGOPT_gnn_stride_val:
+				errno=0; // Setting errno to 0 as suggested in the strtoul() man page
+				options->gnn_stride=strtoul(optarg,&sPtr,10);
+
+				if(sPtr==optarg) {
+					fprintf(stderr,"Cannot find any digit in the specified value (--" LONGOPT_gnn_stride ").\n");
+					print_short_info_err(options,argv[0]);
+				} else if(errno || options->gnn_stride<1) {
+					fprintf(stderr,"Error in parsing the stride for the GNN model. Remember that it must be within [1,1000] frames.\n");
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case LONGOPT_gnn_triggering_threshold_val:
+				errno=0; // Setting errno to 0 as suggested in the strtod() man page
+				options->gnn_triggering_threshold=strtod(optarg,&sPtr);
+
+				if(sPtr==optarg) {
+					fprintf(stderr,"Cannot find any digit in the specified value (--" LONGOPT_gnn_triggering_threshold ").\n");
+					print_short_info_err(options,argv[0]);
+				} else if(errno || options->gnn_triggering_threshold<0.0 || options->gnn_triggering_threshold>1.0) {
+					fprintf(stderr,"Error in parsing the triggering threshold for the GNN model. Remember that it must be within [0.0,1.0].\n");
 					print_short_info_err(options,argv[0]);
 				}
 				break;

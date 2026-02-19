@@ -34,6 +34,8 @@ extern "C" {
 #define RED_ESCAPE "\033[31m"
 #define RESET_ESCAPE "\033[0m"
 
+#define MAX_VEHICLES_PER_FRAME 2000
+
 
 // Global atomic flag to terminate all the threads in case of errors
 std::atomic<bool> terminatorFlag;
@@ -651,8 +653,7 @@ int main(int argc, char **argv) {
 	char *gnn_snapshot_path=nullptr;
 	if(options_string_len(sldm_opts.gnn_snapshot_path)>0)
 		gnn_snapshot_path=options_string_pop(sldm_opts.gnn_snapshot_path);
-	nnModelUpdaterOptions_t nnMUP = {db_ptr, 100, 2000, 100, 1, gnn_snapshot_path}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
-	// #TODO: decide how to configure period and frame size options
+	nnModelUpdaterOptions_t nnMUP = {db_ptr, sldm_opts.gnn_step_len_ms, MAX_VEHICLES_PER_FRAME, sldm_opts.gnn_pack_size, sldm_opts.gnn_stride, gnn_snapshot_path}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
 	pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
 
 	// Get the log file name from the options, if available, to enable log mode inside the AMQP client and the S-LDM modules

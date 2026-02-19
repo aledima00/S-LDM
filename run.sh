@@ -11,5 +11,9 @@ VEHVIZ_UDP_PORT=48110
 VEHVIZ_WEB_PORT=8080
 LOG_FILE=stdout
 GNN_SNAPSHOT_PATH="gnn/input/snap76.pth"
+GNN_STEP_LEN_MS=100
+GNN_PACK_SIZE=100
+GNN_STRIDE=1
+GNN_TRIGGERING_THRESHOLD=0.5
 
-bash -c "./SLDM --disable-misbehaviour-detector --disable-quadkey-filter --gnn-snapshot-path ${GNN_SNAPSHOT_PATH} -A ${SLDM_INTERNAL_AREA} --ext-area-lat-factor ${SLDM_EXTERNAL_AREA_LAT_FACTOR} --ext-area-lon-factor ${SLDM_EXTERNAL_AREA_LON_FACTOR} --broker-url ${BROKER_URL} --broker-queue ${AMQP_TOPIC} --ms-rest-address ${MS_REST_ADDRESS} --ms-rest-port ${MS_REST_PORT} --vehviz-nodejs-address ${VEHVIZ_UDP_ADDRESS} --vehviz-nodejs-port ${VEHVIZ_UDP_PORT} --vehviz-web-port ${VEHVIZ_WEB_PORT} -L ${LOG_FILE}"
+bash -c "./SLDM --disable-misbehaviour-detector --disable-quadkey-filter --gnn-snapshot-path ${GNN_SNAPSHOT_PATH} --gnn-step-len ${GNN_STEP_LEN_MS} --gnn-pack-size ${GNN_PACK_SIZE} --gnn-stride ${GNN_STRIDE} --gnn-triggering-threshold ${GNN_TRIGGERING_THRESHOLD} -A ${SLDM_INTERNAL_AREA} --ext-area-lat-factor ${SLDM_EXTERNAL_AREA_LAT_FACTOR} --ext-area-lon-factor ${SLDM_EXTERNAL_AREA_LON_FACTOR} --broker-url ${BROKER_URL} --broker-queue ${AMQP_TOPIC} --ms-rest-address ${MS_REST_ADDRESS} --ms-rest-port ${MS_REST_PORT} --vehviz-nodejs-address ${VEHVIZ_UDP_ADDRESS} --vehviz-nodejs-port ${VEHVIZ_UDP_PORT} --vehviz-web-port ${VEHVIZ_WEB_PORT} -L ${LOG_FILE}"
