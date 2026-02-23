@@ -35,10 +35,10 @@ class FrameBuffer {
         uint16_t getMaxSize();
 
         bool add(ldmmap::vehicleData_t *vd);
-        bool addCustom(vehicleSnapshot_t* vs);
+        bool addCustom(vehicleSnapshot_t* vs, uint64_t timestamp_us);
         void flushToFd(serialization_t serType);
-        // #TODO:CHECK if add here filtering on time and veh uniqueness or in main add looped function
         bool empty();
+        uint16_t findVehicleIndexByID(uint64_t stationID);
     private:
         int _fd;
         uint16_t _maxsz;
@@ -46,6 +46,7 @@ class FrameBuffer {
         double _lon0;
         GeographicLib::TransverseMercator *_tm_converter_ptr;
         vehicleSnapshot_t *_data;
+        uint64_t *_data_us_timestamps;
 };
 
 #endif // FRAMEBUFFER_H

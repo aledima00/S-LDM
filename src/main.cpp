@@ -265,11 +265,17 @@ void *VehVizUpdater_callback(void *arg) {
 	pthread_exit(nullptr);
 }
 
+typedef struct addVdToFrameArgs {
+	FrameBuffer *fbPtr;
+	uint64_t reftime_us;
+	uint64_t window_size_us;
+} addVdToFrameArgs_t;
 
-void addVdToFrame(ldmmap::vehicleData_t vehdata, void *fbVoidPtr) {
-	FrameBuffer *fbPtr = static_cast<FrameBuffer *>(fbVoidPtr);
-	// TODO: filter by timestamp -> last frame only, 1 per vehicle
-	fbPtr->add(&vehdata);
+void addVdToFrame(ldmmap::vehicleData_t vehdata, void *args) {
+	addVdToFrameArgs_t *targs = static_cast<addVdToFrameArgs_t *>(args);
+	if(vehdata.on_msg_timestamp_us-targs->reftime_us <= targs->window_size_us) {
+		targs->fbPtr->add(&vehdata);
+	}
 }
 
 void randomFillFrameBuffer(FrameBuffer* fbPtr, int num_vehicles){
@@ -283,7 +289,7 @@ void randomFillFrameBuffer(FrameBuffer* fbPtr, int num_vehicles){
 	vs.speed = 10.0;
 	vs.heading = 45.0;
 	for(int i=0;i<num_vehicles;i++){
-		fbPtr->addCustom(&vs);
+		fbPtr->addCustom(&vs, get_timestamp_us());
 		vs.stationID++;
 		vs.x += 0.1;
 		vs.y += 0.1;
@@ -412,7 +418,14 @@ void *nnModelUpdater_callback(void* arg) {
 		// Implement the logic to read from the database and update the neural network model
 		// ---- These operations will be performed periodically ----
 		// Placeholder: print a message indicating the update operation
-		db_ptr->executeOnAllVehicleContents(&addVdToFrame, static_cast<void *>(&frameBuf));
+
+		// get time for window reference
+		addVdToFrameArgs_t addVdArgs = {
+			.fbPtr = &frameBuf,
+			.reftime_us = get_timestamp_us(),
+			.window_size_us = static_cast<uint64_t>(opts->period_ms)*1000
+		};
+		db_ptr->executeOnAllVehicleContents(&addVdToFrame, static_cast<void *>(&addVdArgs));
 		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
 		// --------
 	}

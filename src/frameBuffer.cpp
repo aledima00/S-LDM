@@ -12,21 +12,24 @@ FrameBuffer::FrameBuffer(int fd, uint16_t maxsz, double lon0, double k0): _fd(fd
     _tm_converter_ptr = new GeographicLib::TransverseMercator(a,f,k0);
 
     _data = new vehicleSnapshot_t[_maxsz];
+    _data_us_timestamps = new uint64_t[_maxsz];
 }
 
 FrameBuffer::~FrameBuffer() {
     delete[] _data;
     _data = nullptr;
+    delete [] _data_us_timestamps;
+    _data_us_timestamps = nullptr;
     delete _tm_converter_ptr;
     _tm_converter_ptr = nullptr;
 }
 
 void FrameBuffer::setMaxSize(uint16_t maxsz) {
-    if(_data!=nullptr) {
-        delete[] _data;
-    }
+    delete[] _data;
+    delete[] _data_us_timestamps;
     _maxsz = maxsz;
     _data = new vehicleSnapshot_t[_maxsz];
+    _data_us_timestamps = new uint64_t[_maxsz];
     _idx=0;
 }
 
@@ -34,19 +37,38 @@ uint16_t FrameBuffer::getMaxSize() {
     return _maxsz;
 }
 
-bool FrameBuffer::addCustom(vehicleSnapshot_t* vs) {
+bool FrameBuffer::addCustom(vehicleSnapshot_t* vs, uint64_t timestamp_us) {
     if(_idx>=_maxsz)
         return false;
 
     _data[_idx] = *vs;
+    _data_us_timestamps[_idx] = timestamp_us;
     _idx++;
 
     return true;
 }
 
+uint16_t FrameBuffer::findVehicleIndexByID(uint64_t stationID) {
+    for (uint16_t i = 0; i < _idx; ++i) {
+        if (_data[i].stationID == stationID) {
+            return i;
+        }
+    }
+    return _idx; // Not found, return an index equal to the current size (out of bounds)
+}
+
 bool FrameBuffer::add(ldmmap::vehicleData_t *vd) {
     if(_idx>=_maxsz)
         return false;
+
+    // if found, replace at current, otherwise add at the end and increment index
+    uint16_t insertIdx = findVehicleIndexByID(vd->stationID);
+
+    if(insertIdx<_idx && _data_us_timestamps[insertIdx]>vd->on_msg_timestamp_us) {
+        // if the vehicle is already present but the new data is older than the one already in the frame, skip the update
+        return true;
+    }
+
 
     double x,y;
     _tm_converter_ptr->Forward(_lon0, vd->lat, vd->lon, x, y);
@@ -61,8 +83,11 @@ bool FrameBuffer::add(ldmmap::vehicleData_t *vd) {
         vd->heading
     };
 
-    _data[_idx] = frame;
-    _idx++;
+    _data[insertIdx] = frame;
+    _data_us_timestamps[insertIdx] = vd->on_msg_timestamp_us;
+    // if new, update index
+    if(insertIdx==_idx)
+        _idx++;
 
     return true;
 }
