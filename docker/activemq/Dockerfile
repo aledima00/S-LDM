@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
 ENV USERNAME=activemquser
-ENV ACTIVEMQ_VERSION=5.19.1
+ENV ACTIVEMQ_VERSION=5.19.2
 ENV USERHOME=/home/${USERNAME}
 ENV ACTIVEMQ_HOME=${USERHOME}/.activemq
 ENV SDKMAN_DIR=${USERHOME}/.sdkman
@@ -39,6 +39,11 @@ RUN wget -q https://dlcdn.apache.org/activemq/${ACTIVEMQ_VERSION}/apache-activem
 
 # set access to 0.0.0.0
 RUN sed -i 's/<property name="host" value="127.0.0.1"\/>/<property name="host" value="0.0.0.0"\/>/' ${ACTIVEMQ_HOME}/conf/jetty.xml
+
+# Remove 'upgrade-insecure-requests;' from Content-Security-Policy headers.
+# This CSP directive tells browsers to auto-upgrade HTTP URLs to HTTPS,
+# which breaks all CSS/links/resources when serving over plain HTTP.
+RUN sed -i 's/upgrade-insecure-requests; //g' ${ACTIVEMQ_HOME}/conf/jetty.xml
 
 EXPOSE 8161 61616 5672 61613 5867
 
