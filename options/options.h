@@ -205,10 +205,13 @@ typedef struct options {
 	bool indicatorTrgMan_enabled; // 'true' if the turn indicator trigger manager is enabled (default option), 'false' otherwise
 	bool MBDetector_enabled; // 'true' if the Misbehaviour Detection service is enabled, 'false' otherwise
 	options_string gnn_snapshot_path; // Path of the gnn snapshot file (.pth) used to configure the model and load state dicts.
+	bool gnn_trigger_enabled; // 'true' if the GNN-based trigger is enabled, 'false' otherwise
 	unsigned long int gnn_step_len_ms; // Step length in ms for the GNN model updater (default: 100 ms)
 	unsigned long int gnn_pack_size; // Number of frames to pack together for each inference of the GNN model (default: 100 frames)
 	unsigned long int gnn_stride; // Stride: number of frames popped up from the gnn model between two consecutive inferences (default: 1, i.e., no stride, after each inference, only the first frame is discarded)
 	double gnn_triggering_threshold; // Threshold used to interpret logits as triggers (default: 0.5, i.e., a logit is interpreted as a trigger if it is >= 0.5, otherwise it is not a trigger)
+	double gnn_sumo_netoffset_x; // Sumo netoffset x value to use for the GNN model (default: 0.0)
+	double gnn_sumo_netoffset_y; // Sumo netoffset y value to use for
 
 	bool ageCheck_enabled; // (-g option to set this to 'false') 'true' if an 'age check' on the received data should be performed before updating the database, 'false' otherwise. Default: 'true'.
 	bool quadkFilter_enabled; // 'true' if the QuadKey filter is enabled (messages are pre-filtered by the AMQP broker depending on the Quadkey property), 'false' otherwise (default: 'true' - it must be explicitly disabled, if needed)

@@ -6,10 +6,12 @@
 #include <iomanip>
 
 
-FrameBuffer::FrameBuffer(int fd, uint16_t maxsz, double lon0, double k0): _fd(fd), _maxsz(maxsz), _idx(0), _lon0(lon0), _tm_converter_ptr(nullptr), _data(nullptr) {
+FrameBuffer::FrameBuffer(int fd, uint16_t maxsz, double lat0, double lon0, double netoffset_x, double netoffset_y, double k0): _fd(fd), _maxsz(maxsz), _idx(0), _lat0(lat0), _lon0(lon0), _netoffset_x(netoffset_x), _netoffset_y(netoffset_y), _tm_converter_ptr(nullptr), _data(nullptr) {
     const double a = GeographicLib::Constants::WGS84_a();
     const double f = GeographicLib::Constants::WGS84_f();
     _tm_converter_ptr = new GeographicLib::TransverseMercator(a,f,k0);
+
+    _tm_converter_ptr->Forward(_lon0, _lat0, _lon0, _x0, _y0);
 
     _data = new vehicleSnapshot_t[_maxsz];
     _data_us_timestamps = new uint64_t[_maxsz];
@@ -72,6 +74,8 @@ bool FrameBuffer::add(ldmmap::vehicleData_t *vd) {
 
     double x,y;
     _tm_converter_ptr->Forward(_lon0, vd->lat, vd->lon, x, y);
+    x = (x - _x0) + _netoffset_x;
+    y = (y - _y0) + _netoffset_y;
     FrameBuffer::vehicleSnapshot_t frame = FrameBuffer::vehicleSnapshot_t {
         vd->stationID,
         vd->vehicleWidth.isAvailable() ? static_cast<float>(vd->vehicleWidth.getData()) : 0.0f,

@@ -28,7 +28,7 @@ class FrameBuffer {
             double heading;
         } vehicleSnapshot_t;
 
-        FrameBuffer(int fd, uint16_t maxsz, double lon0, double k0=0.9996);
+        FrameBuffer(int fd, uint16_t maxsz, double lat0, double lon0, double netoffset_x, double netoffset_y, double k0=0.9996);
         ~FrameBuffer();
 
         void setMaxSize(uint16_t maxsz);
@@ -43,6 +43,11 @@ class FrameBuffer {
         int _fd;
         uint16_t _maxsz;
         uint16_t _idx;
+        double _x0;
+        double _y0;
+        double _netoffset_x;
+        double _netoffset_y;
+        double _lat0;
         double _lon0;
         GeographicLib::TransverseMercator *_tm_converter_ptr;
         vehicleSnapshot_t *_data;

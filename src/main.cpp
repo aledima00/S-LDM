@@ -140,6 +140,8 @@ typedef struct nnModelUpdaterOptions {
 	uint16_t pack_size;
 	uint16_t stride;
 	char *gnn_snapshot_path;
+	double sumo_netoffset_x;
+	double sumo_netoffset_y;
 	// other communication config parameters...
 } nnModelUpdaterOptions_t;
 
@@ -398,7 +400,8 @@ void *nnModelUpdater_callback(void* arg) {
 	}
 
 	// create frame object
-	FrameBuffer frameBuf(fifofd, opts->max_frame_size, opts->db_ptr->getCentralLatLon().second, 0.9996);
+	auto central_lat_lon = db_ptr->getCentralLatLon();
+	FrameBuffer frameBuf(fifofd, opts->max_frame_size, central_lat_lon.first, central_lat_lon.second, opts->sumo_netoffset_x, opts->sumo_netoffset_y, 1);
 	// #TODO: decide k0, or if make it configurable
 
 	// Create a new timer
@@ -663,11 +666,13 @@ int main(int argc, char **argv) {
 	// pthread_attr_destroy(&tattr);
 
 	// third thread to read periodically from db and update python nn model
-	char *gnn_snapshot_path=nullptr;
-	if(options_string_len(sldm_opts.gnn_snapshot_path)>0)
-		gnn_snapshot_path=options_string_pop(sldm_opts.gnn_snapshot_path);
-	nnModelUpdaterOptions_t nnMUP = {db_ptr, sldm_opts.gnn_step_len_ms, MAX_VEHICLES_PER_FRAME, sldm_opts.gnn_pack_size, sldm_opts.gnn_stride, gnn_snapshot_path}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
-	pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
+	if (sldm_opts.gnn_trigger_enabled==true){
+		char *gnn_snapshot_path=nullptr;
+		if(options_string_len(sldm_opts.gnn_snapshot_path)>0)
+			gnn_snapshot_path=options_string_pop(sldm_opts.gnn_snapshot_path);
+		nnModelUpdaterOptions_t nnMUP = {db_ptr, sldm_opts.gnn_step_len_ms, MAX_VEHICLES_PER_FRAME, sldm_opts.gnn_pack_size, sldm_opts.gnn_stride, gnn_snapshot_path, sldm_opts.gnn_sumo_netoffset_x, sldm_opts.gnn_sumo_netoffset_y}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
+		pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
+	}
 
 	// Get the log file name from the options, if available, to enable log mode inside the AMQP client and the S-LDM modules
 	std::string logfile_name="";
@@ -822,7 +827,9 @@ int main(int argc, char **argv) {
 
 	pthread_join(dbcleaner_tid,nullptr);
 	pthread_join(vehviz_tid,nullptr);
-	pthread_join(nn_updater_tid,nullptr);
+	if (sldm_opts.gnn_trigger_enabled==true) {
+		pthread_join(nn_updater_tid,nullptr);
+	}
 
 	if(sldm_opts.num_amqp_x_enabled>0) {
 		fprintf(stdout,"[INFO] Terminating the other AMQP clients...\n");

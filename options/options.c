@@ -53,11 +53,13 @@
 #define LONGOPT_enable_ext_lights_hijack "enable-ext-lights-hijack"
 #define LONGOPT_enable_interop_hijack "enable-interop-hijack"
 #define LONGOPT_disable_misbehaviour_detector "disable-misbehaviour-detector"
+#define LONGOPT_disable_gnn_trigger "disable-gnn-trigger"
 #define LONGOPT_gnn_snapshot_path "gnn-snapshot-path"
 #define LONGOPT_gnn_step_len "gnn-step-len"
 #define LONGOPT_gnn_pack_size "gnn-pack-size"
 #define LONGOPT_gnn_stride "gnn-stride"
 #define LONGOPT_gnn_triggering_threshold "gnn-triggering-threshold"
+#define LONGOPT_gnn_sumo_netoffset "gnn-sumo-netoffset"
 // The corresponding "val"s are used internally and they should be set as sequential integers starting from 256 (the range 320-399 should not be used as it is reserved to the AMQP broker long options)
 #define LONGOPT_vehviz_update_interval_sec_val 256
 #define LONGOPT_indicator_trgman_disable_val 257
@@ -70,11 +72,13 @@
 #define LONGOPT_enable_ext_lights_hijack_val 264
 #define LONGOPT_enable_interop_hijack_val 265
 #define LONGOPT_disable_misbehaviour_detector_val 266
-#define LONGOPT_gnn_snapshot_path_val 267
-#define LONGOPT_gnn_step_len_val 268
-#define LONGOPT_gnn_pack_size_val 269
-#define LONGOPT_gnn_stride_val 270
-#define LONGOPT_gnn_triggering_threshold_val 271
+#define LONGOPT_disable_gnn_trigger_val 267
+#define LONGOPT_gnn_snapshot_path_val 268
+#define LONGOPT_gnn_step_len_val 269
+#define LONGOPT_gnn_pack_size_val 270
+#define LONGOPT_gnn_stride_val 271
+#define LONGOPT_gnn_triggering_threshold_val 272
+#define LONGOPT_gnn_sumo_netoffset_val 273
 
 // AMQP broker (additional)
 #define LONGOPT_amqp_enable_additionals "amqp-enable-additionals"
@@ -141,11 +145,13 @@ static const struct option long_opts[]={
 	{LONGOPT_enable_ext_lights_hijack,			no_argument,		NULL, LONGOPT_enable_ext_lights_hijack_val},
 	{LONGOPT_enable_interop_hijack,			no_argument,		NULL, LONGOPT_enable_interop_hijack_val},
 	{LONGOPT_disable_misbehaviour_detector,			no_argument,		NULL, LONGOPT_disable_misbehaviour_detector_val},
+	{LONGOPT_disable_gnn_trigger,			no_argument,		NULL, LONGOPT_disable_gnn_trigger_val},
 	{LONGOPT_gnn_snapshot_path,				required_argument,	NULL, LONGOPT_gnn_snapshot_path_val},
 	{LONGOPT_gnn_step_len,				required_argument,	NULL, LONGOPT_gnn_step_len_val},
 	{LONGOPT_gnn_pack_size,				required_argument,	NULL, LONGOPT_gnn_pack_size_val},
 	{LONGOPT_gnn_stride,				required_argument,	NULL, LONGOPT_gnn_stride_val},
 	{LONGOPT_gnn_triggering_threshold,				required_argument,	NULL, LONGOPT_gnn_triggering_threshold_val},
+	{LONGOPT_gnn_sumo_netoffset,				required_argument,	NULL, LONGOPT_gnn_sumo_netoffset_val},
 
 	// Additional AMQP clients options
 	{LONGOPT_amqp_enable_additionals,					required_argument,		NULL, LONGOPT_amqp_enable_additionals_val},
@@ -366,6 +372,10 @@ static const struct option long_opts[]={
 	"\t  any received message will be stored without running checks on it, messages can still be discarded by other checks,\n" \
 	"\t  eg. position filtering that is always enabled or ageCheck that is managed by its own option.\n" \
 
+#define OPT_disable_gnn_trigger \
+	"  --"LONGOPT_disable_gnn_trigger": when this options is specified, the gnn-based trigger is disabled\n" \
+	"\t  the python inference module will not be initialized and no data will be sent to it.\n"
+
 #define OPT_gnn_snapshot_path \
 	"  --"LONGOPT_gnn_snapshot_path": <path relative to cwd>: path of the gnn snapshot file (.pth) used to configure the model and load state dicts.\n"
 
@@ -385,6 +395,9 @@ static const struct option long_opts[]={
 #define OPT_gnn_triggering_threshold \
 	"  --"LONGOPT_gnn_triggering_threshold": <floating point number>: threshold used to determine whether to interpret output logits of the gnn models as triggers.\n"\
 	"\t  It must be between 0 and 1; default is "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)" (i.e. a logit is interpreted as a trigger if it is >= "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)", otherwise it is not a trigger).\n"
+
+#define OPT_gnn_sumo_netoffset \
+	"  --"LONGOPT_gnn_sumo_netoffset": <string of comma-separated float values>: this offset is used in the conversion from Lat/Lon to SUMO x/y coordinates for the gnn model. The string should contain two comma-separated float values, where the first one is the offset to be applied to the x coordinate and the second one is the offset to be applied to the y coordinate. Default: \"0.0,0.0\" (i.e., no offset is applied).\n"
 
 static void print_long_info(char *argv0) {
 	fprintf(stdout,"\nUsage: %s [-A S-LDM coverage internal area] [options]\n"
@@ -425,11 +438,13 @@ static void print_long_info(char *argv0) {
 		OPT_amqp_main_reconn_local_timeout_exp
 		OPT_brokers_enable_description
 		OPT_disable_misbehaviour_detector
+		OPT_disable_gnn_trigger
 		OPT_gnn_snapshot_path
 		OPT_gnn_step_len
 		OPT_gnn_pack_size
 		OPT_gnn_stride
 		OPT_gnn_triggering_threshold
+		OPT_gnn_sumo_netoffset
 		,
 		argv0,argv0,argv0);
 
@@ -527,11 +542,14 @@ void options_initialize(struct options *options) {
 	options->od_json_interface_enabled=false;
 	options->od_json_interface_port=DEFAULT_OD_JSON_OVER_TCP_INTERFACE_PORT;
 
+	options->gnn_trigger_enabled=true;
 	options->gnn_snapshot_path=options_string_declare();
 	options->gnn_step_len_ms=DEFAULT_GNN_STEP_LEN_MS;
 	options->gnn_pack_size=DEFAULT_GNN_PACK_SIZE;
 	options->gnn_stride=DEFAULT_GNN_STRIDE;
 	options->gnn_triggering_threshold=DEFAULT_GNN_TRIGGERING_THRESHOLD;
+	options->gnn_sumo_netoffset_x=0.0;
+	options->gnn_sumo_netoffset_y=0.0;
 }
 
 unsigned int parse_options(int argc, char **argv, struct options *options) {
@@ -814,6 +832,10 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 				options->MBDetector_enabled=false;
 				break;
 
+			case LONGOPT_disable_gnn_trigger_val:
+				options->gnn_trigger_enabled=false;
+				break;
+
 			case LONGOPT_gnn_snapshot_path_val:
 				if(!options_string_push(&(options->gnn_snapshot_path),optarg)) {
 					fprintf(stderr,"Error in parsing the gnn snapshot path: %s.\n",optarg);
@@ -869,6 +891,13 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 					print_short_info_err(options,argv[0]);
 				} else if(errno || options->gnn_triggering_threshold<0.0 || options->gnn_triggering_threshold>1.0) {
 					fprintf(stderr,"Error in parsing the triggering threshold for the GNN model. Remember that it must be within [0.0,1.0].\n");
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case LONGOPT_gnn_sumo_netoffset_val:
+				if(sscanf(optarg,"%f,%f",&options->gnn_sumo_netoffset_x,&options->gnn_sumo_netoffset_y)<2) {
+					fprintf(stderr,"Error in parsing the SUMO net offset for the GNN model. Remember that it should be a string of two comma-separated float values, such as \"0.0,0.0\".\n");
 					print_short_info_err(options,argv[0]);
 				}
 				break;
