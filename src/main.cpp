@@ -135,7 +135,7 @@ typedef struct vizOptions {
 
 typedef struct nnModelUpdaterOptions {
 	ldmmap::LDMMap *db_ptr;
-	uint16_t period_ms;
+	uint64_t period_ms;
 	uint16_t max_frame_size;
 	uint16_t pack_size;
 	uint16_t stride;
@@ -269,13 +269,13 @@ void *VehVizUpdater_callback(void *arg) {
 
 typedef struct addVdToFrameArgs {
 	FrameBuffer *fbPtr;
-	uint64_t reftime_us;
-	uint64_t window_size_us;
+	uint64_t reftime_ms;
+	uint64_t window_size_ms;
 } addVdToFrameArgs_t;
 
 void addVdToFrame(ldmmap::vehicleData_t vehdata, void *args) {
 	addVdToFrameArgs_t *targs = static_cast<addVdToFrameArgs_t *>(args);
-	if(targs->reftime_us-vehdata.on_msg_timestamp_us <= targs->window_size_us) {
+	if(targs->reftime_ms-vehdata.gnTimestamp <= targs->window_size_ms) {
 		targs->fbPtr->add(&vehdata);
 	}
 	else{
@@ -410,7 +410,6 @@ void *nnModelUpdater_callback(void* arg) {
 	// Create a new timer
 	Timer tmr(opts->period_ms);
 	std::cout << "[INFO] Neural Network Model Updater started. Updating every " << opts->period_ms << " milliseconds." << std::endl;
-	uint64_t p_us = opts->period_ms*1000;
 	if(tmr.start()==false) {
 		std::cerr << "[ERROR] Fatal error! Cannot create timer for the Neural Network Model Updater thread!" << std::endl;
 		unlink(fifo_path.c_str());
@@ -428,8 +427,8 @@ void *nnModelUpdater_callback(void* arg) {
 		// get time for window reference
 		addVdToFrameArgs_t addVdArgs = {
 			.fbPtr = &frameBuf,
-			.reftime_us = get_timestamp_us(),
-			.window_size_us = p_us
+			.reftime_ms = get_timestamp_ms_gn(),
+			.window_size_ms = opts->period_ms
 		};
 		db_ptr->executeOnAllVehicleContents(&addVdToFrame, static_cast<void *>(&addVdArgs));
 		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
