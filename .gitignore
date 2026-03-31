@@ -20,3 +20,7 @@ DENMtimestamps_25v.csv
 
 # docker .env file
 docker/.env
+
+out/
+logs/
+todo.md
