@@ -60,6 +60,7 @@
 #define LONGOPT_gnn_stride "gnn-stride"
 #define LONGOPT_gnn_triggering_threshold "gnn-triggering-threshold"
 #define LONGOPT_gnn_sumo_netoffset "gnn-sumo-netoffset"
+#define LONGOPT_gnn_csv_out_path "gnn-csv-out-path"
 // The corresponding "val"s are used internally and they should be set as sequential integers starting from 256 (the range 320-399 should not be used as it is reserved to the AMQP broker long options)
 #define LONGOPT_vehviz_update_interval_sec_val 256
 #define LONGOPT_indicator_trgman_disable_val 257
@@ -79,6 +80,7 @@
 #define LONGOPT_gnn_stride_val 271
 #define LONGOPT_gnn_triggering_threshold_val 272
 #define LONGOPT_gnn_sumo_netoffset_val 273
+#define LONGOPT_gnn_csv_out_path_val 274
 
 // AMQP broker (additional)
 #define LONGOPT_amqp_enable_additionals "amqp-enable-additionals"
@@ -152,6 +154,7 @@ static const struct option long_opts[]={
 	{LONGOPT_gnn_stride,				required_argument,	NULL, LONGOPT_gnn_stride_val},
 	{LONGOPT_gnn_triggering_threshold,				required_argument,	NULL, LONGOPT_gnn_triggering_threshold_val},
 	{LONGOPT_gnn_sumo_netoffset,				required_argument,	NULL, LONGOPT_gnn_sumo_netoffset_val},
+	{LONGOPT_gnn_csv_out_path,				required_argument,	NULL, LONGOPT_gnn_csv_out_path_val},
 
 	// Additional AMQP clients options
 	{LONGOPT_amqp_enable_additionals,					required_argument,		NULL, LONGOPT_amqp_enable_additionals_val},
@@ -399,6 +402,10 @@ static const struct option long_opts[]={
 #define OPT_gnn_sumo_netoffset \
 	"  --"LONGOPT_gnn_sumo_netoffset": <string of comma-separated float values>: this offset is used in the conversion from Lat/Lon to SUMO x/y coordinates for the gnn model. The string should contain two comma-separated float values, where the first one is the offset to be applied to the x coordinate and the second one is the offset to be applied to the y coordinate. Default: \"0.0,0.0\" (i.e., no offset is applied).\n"
 
+#define OPT_gnn_csv_out_path \
+	"  --"LONGOPT_gnn_csv_out_path": <path relative to cwd>: path of the output CSV file where inference results of the gnn model will be saved.\n"\
+	"\t  If not specified, it defaults to "STRINGIFY(DEFAULT_GNN_CSV_OUT_PATH)"\n"
+
 static void print_long_info(char *argv0) {
 	fprintf(stdout,"\nUsage: %s [-A S-LDM coverage internal area] [options]\n"
 		"%s [-h | --"LONGOPT_h"]: print help and show options\n"
@@ -445,6 +452,7 @@ static void print_long_info(char *argv0) {
 		OPT_gnn_stride
 		OPT_gnn_triggering_threshold
 		OPT_gnn_sumo_netoffset
+		OPT_gnn_csv_out_path
 		,
 		argv0,argv0,argv0);
 
@@ -550,6 +558,7 @@ void options_initialize(struct options *options) {
 	options->gnn_triggering_threshold=DEFAULT_GNN_TRIGGERING_THRESHOLD;
 	options->gnn_sumo_netoffset_x=0.0;
 	options->gnn_sumo_netoffset_y=0.0;
+	options->gnn_csv_out_path=options_string_declare();
 }
 
 unsigned int parse_options(int argc, char **argv, struct options *options) {
@@ -902,6 +911,13 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 				}
 				break;
 
+			case LONGOPT_gnn_csv_out_path_val:
+				if(!options_string_push(&(options->gnn_csv_out_path),optarg)) {
+					fprintf(stderr,"Error in parsing the gnn CSV output path: %s.\n",optarg);
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
 			// Additional AMQP clients options
 			// ----------------------------------
 			case LONGOPT_amqp_enable_additionals_val:
@@ -1125,6 +1141,13 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 	if(options_string_len(options->gn_timestamp_property)<=0) {
 		if(!options_string_push(&(options->gn_timestamp_property),DEFAULT_GN_TIMESTAMP_PROPERTY)) {
 			fprintf(stderr,"Error! Cannot set the default gn timestamp property name.\nPlease report this bug to the developers.\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	if(options_string_len(options->gnn_csv_out_path)<=0) {
+		if(!options_string_push(&(options->gnn_csv_out_path),DEFAULT_GNN_CSV_OUT_PATH)) {
+			fprintf(stderr,"Error! Cannot set the default GNN CSV output path.\nPlease report this bug to the developers.\n");
 			exit(EXIT_FAILURE);
 		}
 	}

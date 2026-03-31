@@ -142,6 +142,7 @@ typedef struct nnModelUpdaterOptions {
 	char *gnn_snapshot_path;
 	double sumo_netoffset_x;
 	double sumo_netoffset_y;
+	char *gnn_csv_out_path;
 	// other communication config parameters...
 } nnModelUpdaterOptions_t;
 
@@ -303,7 +304,7 @@ void randomFillFrameBuffer(FrameBuffer* fbPtr, int num_vehicles){
 }
 
 extern char **environ;
-pid_t uv_spawn_gnn(char *fifo_path, uint16_t pack_size, uint16_t stride, char *gnn_snapshot_path) {
+pid_t uv_spawn_gnn(char *fifo_path, uint16_t pack_size, uint16_t stride, char *gnn_snapshot_path, char* gnn_csv_out_path) {
 	posix_spawn_file_actions_t fa;
 	posix_spawn_file_actions_init(&fa);
 
@@ -334,6 +335,8 @@ pid_t uv_spawn_gnn(char *fifo_path, uint16_t pack_size, uint16_t stride, char *g
 	PBCI(stride,5);
 	PBC(opt_w,"-s");
 	PB(gnn_snapshot_path);
+	PBC(opt_o, "-O");
+	PB(gnn_csv_out_path);
     PB(nullptr);
 
 
@@ -390,7 +393,8 @@ void *nnModelUpdater_callback(void* arg) {
 
 	// spawn the gnn model and attach it to the pipe
 	std::string gnn_relative_snapshot_path = std::string("../") + opts->gnn_snapshot_path;
-	pid_t pygnn_pid = uv_spawn_gnn(const_cast<char*>(fifo_path.c_str()), opts->pack_size, opts->stride, const_cast<char*>(gnn_relative_snapshot_path.c_str()));
+	std::string gnn_relative_csv_out_path = std::string("../") + opts->gnn_csv_out_path;
+	pid_t pygnn_pid = uv_spawn_gnn(const_cast<char*>(fifo_path.c_str()), opts->pack_size, opts->stride, const_cast<char*>(gnn_relative_snapshot_path.c_str()), const_cast<char*>(gnn_relative_csv_out_path.c_str()));
 	if (pygnn_pid < 0) {
 		std::cerr << "[ERROR] Cannot spawn the GNN model process for Neural Network Model Updater!" << std::endl;
 		close(fifofd);
@@ -672,7 +676,12 @@ int main(int argc, char **argv) {
 		char *gnn_snapshot_path=nullptr;
 		if(options_string_len(sldm_opts.gnn_snapshot_path)>0)
 			gnn_snapshot_path=options_string_pop(sldm_opts.gnn_snapshot_path);
-		nnModelUpdaterOptions_t nnMUP = {db_ptr, sldm_opts.gnn_step_len_ms, MAX_VEHICLES_PER_FRAME, sldm_opts.gnn_pack_size, sldm_opts.gnn_stride, gnn_snapshot_path, sldm_opts.gnn_sumo_netoffset_x, sldm_opts.gnn_sumo_netoffset_y}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
+
+		char *gnn_csv_out_path=nullptr;
+		if(options_string_len(sldm_opts.gnn_csv_out_path)>0)
+			gnn_csv_out_path=options_string_pop(sldm_opts.gnn_csv_out_path);
+		
+		nnModelUpdaterOptions_t nnMUP = {db_ptr, sldm_opts.gnn_step_len_ms, MAX_VEHICLES_PER_FRAME, sldm_opts.gnn_pack_size, sldm_opts.gnn_stride, gnn_snapshot_path, sldm_opts.gnn_sumo_netoffset_x, sldm_opts.gnn_sumo_netoffset_y, gnn_csv_out_path}; // every 100 ms, max frame size 2000 vehicles, 100 frames, stride=1
 		pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
 	}
 
