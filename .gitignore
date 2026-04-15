@@ -18,9 +18,6 @@ S-LDM.includes
 last_bounding_box.txt
 DENMtimestamps_25v.csv
 
-# docker .env file
-docker/.env
-
 out/
 logs/
 todo.md
