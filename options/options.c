@@ -905,10 +905,16 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 				break;
 
 			case LONGOPT_gnn_sumo_netoffset_val:
-				if(sscanf(optarg,"%f,%f",&options->gnn_sumo_netoffset_x,&options->gnn_sumo_netoffset_y)<2) {
+				{
+					char trailing_char='\0';
+					int parsed_fields=sscanf(optarg," %lf , %lf %c",&options->gnn_sumo_netoffset_x,&options->gnn_sumo_netoffset_y,&trailing_char);
+					if(parsed_fields!=2) {
 					fprintf(stderr,"Error in parsing the SUMO net offset for the GNN model. Remember that it should be a string of two comma-separated float values, such as \"0.0,0.0\".\n");
 					print_short_info_err(options,argv[0]);
+					}
 				}
+				printf("received netoffset: %f and %f\n",options->gnn_sumo_netoffset_x,options->gnn_sumo_netoffset_y);
+				// TODO: remove dbg log
 				break;
 
 			case LONGOPT_gnn_csv_out_path_val:
