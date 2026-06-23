@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 
 
 FrameBuffer::FrameBuffer(int fd, uint16_t maxsz, double lat0, double lon0, double netoffset_x, double netoffset_y, double k0): _fd(fd), _maxsz(maxsz), _idx(0), _lat0(lat0), _lon0(lon0), _netoffset_x(netoffset_x), _netoffset_y(netoffset_y), _tm_converter_ptr(nullptr), _data(nullptr) {
@@ -78,8 +79,8 @@ bool FrameBuffer::add(ldmmap::vehicleData_t *vd) {
     y = (y - _y0) + _netoffset_y;
     FrameBuffer::vehicleSnapshot_t frame = FrameBuffer::vehicleSnapshot_t {
         vd->stationID,
-        vd->vehicleWidth.isAvailable() ? static_cast<float>(vd->vehicleWidth.getData()) : 0.0f,
-        vd->vehicleLength.isAvailable() ? static_cast<float>(vd->vehicleLength.getData()) : 0.0f,
+        (vd->vehicleWidth.isAvailable() ? static_cast<float>(vd->vehicleWidth.getData()) : 0.0f)/1000.0f, // convert from mm to m
+        (vd->vehicleLength.isAvailable() ? static_cast<float>(vd->vehicleLength.getData()) : 0.0f)/1000.0f, // convert from mm to m
         vd->stationType,
         x,
         y,
@@ -110,9 +111,9 @@ void FrameBuffer::flushToFd(serialization_t serType) {
 
                 ss << "{"
                 << "\"VehicleId\":" << v.stationID << ","
-                << "\"width\":" << std::fixed << std::setprecision(3) << v.width << ","
-                << "\"length\":" << std::fixed << std::setprecision(3) << v.length << ","
-                << "\"stType\":" << static_cast<int>(v.stationType) << ","
+                << "\"Width\":" << std::fixed << std::setprecision(3) << v.width << ","
+                << "\"Length\":" << std::fixed << std::setprecision(3) << v.length << ","
+                << "\"StationType\":" << static_cast<int>(v.stationType) << ","
                 << "\"X\":" << std::fixed << std::setprecision(6) << v.x << ","
                 << "\"Y\":" << std::fixed << std::setprecision(6) << v.y << ","
                 << "\"Speed\":" << std::fixed << std::setprecision(6) << v.speed << ","
