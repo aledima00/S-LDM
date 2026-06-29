@@ -18,3 +18,4 @@ S-LDM.includes
 last_bounding_box.txt
 DENMtimestamps_25v.csv
 .devcontainer
+run.sh
