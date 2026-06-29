@@ -139,6 +139,13 @@ static inline bool fill_AMQPClient_options_array_##name(char * optarg, int num_c
 // Default port for the on-demand JSON-over-TCP interface
 #define DEFAULT_OD_JSON_OVER_TCP_INTERFACE_PORT 49000
 
+// Default gnn parameters
+#define DEFAULT_GNN_STEP_LEN_MS 100
+#define DEFAULT_GNN_PACK_SIZE 100
+#define DEFAULT_GNN_STRIDE 1
+#define DEFAULT_GNN_TRIGGERING_THRESHOLD 0.5
+#define DEFAULT_GNN_CSV_OUT_PATH "gnn_inference_results.csv"
+
 // Valid options
 // Any new option should be handled in the switch-case inside parse_options() and the corresponding char should be added to VALID_OPTS
 // If an option accepts an additional argument, it is followed by ':'
@@ -198,6 +205,15 @@ typedef struct options {
 
 	bool indicatorTrgMan_enabled; // 'true' if the turn indicator trigger manager is enabled (default option), 'false' otherwise
 	bool MBDetector_enabled; // 'true' if the Misbehaviour Detection service is enabled, 'false' otherwise
+	options_string gnn_snapshot_path; // Path of the gnn snapshot file (.pth) used to configure the model and load state dicts.
+	bool gnn_trigger_enabled; // 'true' if the GNN-based trigger is enabled, 'false' otherwise
+	unsigned long int gnn_step_len_ms; // Step length in ms for the GNN model updater (default: 100 ms)
+	unsigned long int gnn_pack_size; // Number of frames to pack together for each inference of the GNN model (default: 100 frames)
+	unsigned long int gnn_stride; // Stride: number of frames popped up from the gnn model between two consecutive inferences (default: 1, i.e., no stride, after each inference, only the first frame is discarded)
+	double gnn_triggering_threshold; // Threshold used to interpret logits as triggers (default: 0.5, i.e., a logit is interpreted as a trigger if it is >= 0.5, otherwise it is not a trigger)
+	double gnn_sumo_netoffset_x; // Sumo netoffset x value to use for the GNN model (default: 0.0)
+	double gnn_sumo_netoffset_y; // Sumo netoffset y value to use for
+	options_string gnn_csv_out_path; // Path to the CSV file where the GNN inference results will be saved. If not specified, the results won't be saved on a CSV file.
 
 	bool ageCheck_enabled; // (-g option to set this to 'false') 'true' if an 'age check' on the received data should be performed before updating the database, 'false' otherwise. Default: 'true'.
 	bool quadkFilter_enabled; // 'true' if the QuadKey filter is enabled (messages are pre-filtered by the AMQP broker depending on the Quadkey property), 'false' otherwise (default: 'true' - it must be explicitly disabled, if needed)

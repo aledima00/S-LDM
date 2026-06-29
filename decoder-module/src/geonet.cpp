@@ -58,7 +58,7 @@ namespace etsiDecoder {
         //1)Check version field
         if(basicH.GetVersion() != m_GnPtotocolVersion && basicH.GetVersion() != 0)
         {
-            std::cerr<< "[ERROR] [Decoder] Incorrect version of GN protocol" << std::endl;
+            std::cerr<< "[ERROR] [Decoder] Incorrect version of GN protocol (expected version " << static_cast<unsigned int>(m_GnPtotocolVersion)<< ", received version"<< static_cast<unsigned int>(basicH.GetVersion()) << ")" << std::endl;
             return GN_VERSION_ERROR;
 
         } 
