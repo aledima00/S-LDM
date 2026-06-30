@@ -1,30 +1,11 @@
 #!/usr/bin/env bash
 
+PINNED_COMMIT="eadccbf8fb7b4d30f199d63538acf71a5a47789d"
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 <WORKSPACE_DIR>"
-    exit 1
-fi
-
-WORKSPACE_DIR="$(realpath "$1")"
-
 PATCH_SRC_DIR="${SCRIPT_DIR}/src"
-
-TRACI_DEST="${WORKSPACE_DIR}/src/traci/model"
-NS3_DEST="${WORKSPACE_DIR}/ns-3-dev/src/automotive/examples"
-
-# Check for ns-3-dev installation
-if [[ ! -d "${WORKSPACE_DIR}/ns-3-dev" ]]; then
-    echo "WARNING: 'ns-3-dev' was not found in the provided workspace."
-    echo
-    echo "Please install the VAN3Twin dependencies before applying this patch."
-    echo "Refer to the official GitHub documentation (https://github.com/DriveX-devs/VaN3Twin/blob/master/README.md) for the installation instructions."
-    exit 1
-fi
-
 # Verify source files exist
 for file in \
     "traci-client.cc" \
@@ -37,6 +18,36 @@ do
         exit 1
     fi
 done
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <WORKSPACE_DIR>"
+    exit 1
+fi
+
+
+WORKSPACE_DIR="$(realpath "$1")"
+NS3_DIR="${WORKSPACE_DIR}/ns-3-dev"
+
+# Check for ns-3-dev installation
+if [[ ! -d "${NS3_DIR}" ]]; then
+    echo "WARNING: 'ns-3-dev' was not found in the provided workspace."
+    echo
+    echo "Please install the VAN3Twin dependencies before applying this patch."
+    echo "Refer to the official GitHub documentation (https://github.com/DriveX-devs/VaN3Twin/blob/master/README.md) for the installation instructions."
+    exit 1
+fi
+
+echo "Checking out pinned commit:"
+echo "  ${PINNED_COMMIT}"
+echo "in repository:"
+echo "  ${NS3_DIR}"
+echo
+
+
+# ---- everything looks good, apply the patch
+
+TRACI_DEST="${WORKSPACE_DIR}/src/traci/model"
+NS3_DEST="${NS3_DIR}/src/automotive/examples"
 
 echo "Applying VAN3Twin patch to workspace:"
 echo "  ${WORKSPACE_DIR}"
