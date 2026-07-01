@@ -57,7 +57,6 @@
 #define LONGOPT_gnn_snapshot_path "gnn-snapshot-path"
 #define LONGOPT_gnn_step_len "gnn-step-len"
 #define LONGOPT_gnn_pack_size "gnn-pack-size"
-#define LONGOPT_gnn_stride "gnn-stride"
 #define LONGOPT_gnn_triggering_threshold "gnn-triggering-threshold"
 #define LONGOPT_gnn_sumo_netoffset "gnn-sumo-netoffset"
 #define LONGOPT_gnn_csv_out_path "gnn-csv-out-path"
@@ -77,10 +76,9 @@
 #define LONGOPT_gnn_snapshot_path_val 268
 #define LONGOPT_gnn_step_len_val 269
 #define LONGOPT_gnn_pack_size_val 270
-#define LONGOPT_gnn_stride_val 271
-#define LONGOPT_gnn_triggering_threshold_val 272
-#define LONGOPT_gnn_sumo_netoffset_val 273
-#define LONGOPT_gnn_csv_out_path_val 274
+#define LONGOPT_gnn_triggering_threshold_val 271
+#define LONGOPT_gnn_sumo_netoffset_val 272
+#define LONGOPT_gnn_csv_out_path_val 273
 
 // AMQP broker (additional)
 #define LONGOPT_amqp_enable_additionals "amqp-enable-additionals"
@@ -151,7 +149,6 @@ static const struct option long_opts[]={
 	{LONGOPT_gnn_snapshot_path,				required_argument,	NULL, LONGOPT_gnn_snapshot_path_val},
 	{LONGOPT_gnn_step_len,				required_argument,	NULL, LONGOPT_gnn_step_len_val},
 	{LONGOPT_gnn_pack_size,				required_argument,	NULL, LONGOPT_gnn_pack_size_val},
-	{LONGOPT_gnn_stride,				required_argument,	NULL, LONGOPT_gnn_stride_val},
 	{LONGOPT_gnn_triggering_threshold,				required_argument,	NULL, LONGOPT_gnn_triggering_threshold_val},
 	{LONGOPT_gnn_sumo_netoffset,				required_argument,	NULL, LONGOPT_gnn_sumo_netoffset_val},
 	{LONGOPT_gnn_csv_out_path,				required_argument,	NULL, LONGOPT_gnn_csv_out_path_val},
@@ -391,10 +388,6 @@ static const struct option long_opts[]={
 	"  --"LONGOPT_gnn_pack_size": <integer>: number of frames to pack together for each inference of the GNN model.\n"\
 	"\t  It must be greater or equal than 1 frame; default is "STRINGIFY(DEFAULT_GNN_PACK_SIZE)" (i.e. each sequence inferred is "STRINGIFY(DEFAULT_GNN_PACK_SIZE)" frames long).\n"
 
-#define OPT_gnn_stride \
-	"  --"LONGOPT_gnn_stride": <integer>: stride = number of frames popped up from the gnn model between two consecutive inferences.\n"\
-	"\t  It must be greater or equal than 1 frame; default is "STRINGIFY(DEFAULT_GNN_STRIDE)" (i.e. after each inference only discards first "STRINGIFY(DEFAULT_GNN_STRIDE)" frame, and only "STRINGIFY(DEFAULT_GNN_STRIDE)" more frame enters as last).\n"
-
 #define OPT_gnn_triggering_threshold \
 	"  --"LONGOPT_gnn_triggering_threshold": <floating point number>: threshold used to determine whether to interpret output logits of the gnn models as triggers.\n"\
 	"\t  It must be between 0 and 1; default is "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)" (i.e. a logit is interpreted as a trigger if it is >= "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)", otherwise it is not a trigger).\n"
@@ -449,7 +442,6 @@ static void print_long_info(char *argv0) {
 		OPT_gnn_snapshot_path
 		OPT_gnn_step_len
 		OPT_gnn_pack_size
-		OPT_gnn_stride
 		OPT_gnn_triggering_threshold
 		OPT_gnn_sumo_netoffset
 		OPT_gnn_csv_out_path
@@ -554,7 +546,6 @@ void options_initialize(struct options *options) {
 	options->gnn_snapshot_path=options_string_declare();
 	options->gnn_step_len_ms=DEFAULT_GNN_STEP_LEN_MS;
 	options->gnn_pack_size=DEFAULT_GNN_PACK_SIZE;
-	options->gnn_stride=DEFAULT_GNN_STRIDE;
 	options->gnn_triggering_threshold=DEFAULT_GNN_TRIGGERING_THRESHOLD;
 	options->gnn_sumo_netoffset_x=0.0;
 	options->gnn_sumo_netoffset_y=0.0;
@@ -877,20 +868,7 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 					print_short_info_err(options,argv[0]);
 				}
 				break;
-
-			case LONGOPT_gnn_stride_val:
-				errno=0; // Setting errno to 0 as suggested in the strtoul() man page
-				options->gnn_stride=strtoul(optarg,&sPtr,10);
-
-				if(sPtr==optarg) {
-					fprintf(stderr,"Cannot find any digit in the specified value (--" LONGOPT_gnn_stride ").\n");
-					print_short_info_err(options,argv[0]);
-				} else if(errno || options->gnn_stride<1) {
-					fprintf(stderr,"Error in parsing the stride for the GNN model. Remember that it must be within [1,1000] frames.\n");
-					print_short_info_err(options,argv[0]);
-				}
-				break;
-
+			
 			case LONGOPT_gnn_triggering_threshold_val:
 				errno=0; // Setting errno to 0 as suggested in the strtod() man page
 				options->gnn_triggering_threshold=strtod(optarg,&sPtr);
