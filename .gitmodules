@@ -2,3 +2,6 @@
 	path = gnn
 	url = https://github.com/aledima00/sldm-gnn.git
 	branch = main
+[submodule "dataset-generator"]
+	path = dataset-generator
+	url = https://github.com/aledima00/sumo-dataset-generator.git
