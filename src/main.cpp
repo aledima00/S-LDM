@@ -421,7 +421,6 @@ void *nnModelUpdater_callback(void* arg) {
 	// create frame object
 	auto central_lat_lon = db_ptr->getCentralLatLon();
 	FrameBuffer frameBuf(fifofd, opts->max_frame_size, central_lat_lon.first, central_lat_lon.second, opts->sumo_netoffset_x, opts->sumo_netoffset_y, 1);
-	// #TODO: decide k0, or if make it configurable
 
 	// Create a new timer
 	Timer tmr(opts->period_ms);
@@ -452,7 +451,6 @@ void *nnModelUpdater_callback(void* arg) {
 	}
 
 	if (!frameBuf.empty()) {
-		// #TODO:CHECK this, and in general handle fail conditions
 		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
 	}
 

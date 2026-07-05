@@ -891,8 +891,7 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 					print_short_info_err(options,argv[0]);
 					}
 				}
-				printf("received netoffset: %f and %f\n",options->gnn_sumo_netoffset_x,options->gnn_sumo_netoffset_y);
-				// TODO: remove dbg log
+				// printf("received netoffset: %f and %f\n",options->gnn_sumo_netoffset_x,options->gnn_sumo_netoffset_y);
 				break;
 
 			case LONGOPT_gnn_csv_out_path_val:
