@@ -4,6 +4,10 @@
 #include <condition_variable>
 #include <thread>
 #include <time.h>
+#include <vector>
+#include <string>
+#include <sys/wait.h>
+#include <spawn.h>
 #include "curl/curl.h"
 
 #include "LDMmap.h"
@@ -13,6 +17,7 @@
 #include "JSONserver.h"
 #include "utils.h"
 #include "timers.h"
+#include "frameBuffer.h"
 
 extern "C" {
 	#include "options.h"
@@ -24,6 +29,13 @@ extern "C" {
 
 #define DB_CLEANER_INTERVAL_SECONDS 1
 #define DB_DELETE_OLDER_THAN_SECONDS 1 // This value should NEVER be set greater than (5-DB_CLEANER_INTERVAL_SECONDS/60) minutes or (300-DB_CLEANER_INTERVAL_SECONDS) seconds - doing so may break the database age check functionality!
+#define GREEN_ESCAPE "\033[32m"
+#define YELLOW_ESCAPE "\033[33m"
+#define RED_ESCAPE "\033[31m"
+#define RESET_ESCAPE "\033[0m"
+
+#define MAX_VEHICLES_PER_FRAME 2000
+
 
 // Global atomic flag to terminate all the threads in case of errors
 std::atomic<bool> terminatorFlag;
@@ -120,6 +132,18 @@ typedef struct vizOptions {
 	ldmmap::LDMMap *db_ptr;
 	options_t *opts_ptr;
 } vizOptions_t;
+
+typedef struct nnModelUpdaterOptions {
+	ldmmap::LDMMap *db_ptr;
+	uint64_t period_ms;
+	uint16_t max_frame_size;
+	uint16_t pack_size;
+	char *gnn_snapshot_path;
+	double sumo_netoffset_x;
+	double sumo_netoffset_y;
+	char *gnn_csv_out_path;
+	// other communication config parameters...
+} nnModelUpdaterOptions_t;
 
 void clearVisualizerObject(uint64_t id,void *vizObjVoidPtr) {
 	vehicleVisualizer *vizObjPtr = static_cast<vehicleVisualizer *>(vizObjVoidPtr);
@@ -258,6 +282,186 @@ void *VehVizUpdater_callback(void *arg) {
 	pthread_exit(nullptr);
 }
 
+typedef struct addVdToFrameArgs {
+	FrameBuffer *fbPtr;
+	uint64_t reftime_ms;
+	uint64_t window_size_ms;
+} addVdToFrameArgs_t;
+
+void addVdToFrame(ldmmap::vehicleData_t vehdata, void *args) {
+	addVdToFrameArgs_t *targs = static_cast<addVdToFrameArgs_t *>(args);
+	if(targs->reftime_ms-vehdata.gnTimestamp <= targs->window_size_ms) {
+		targs->fbPtr->add(&vehdata);
+	}
+	else{
+		std::cout << "Vehicle with stationID " << vehdata.stationID << " is outside the time window for the current frame. Not adding it to the frame buffer." << std::endl;
+	}
+}
+
+void randomFillFrameBuffer(FrameBuffer* fbPtr, int num_vehicles){
+	FrameBuffer::vehicleSnapshot_t vs;
+	vs.stationID = 1001;
+	vs.width = 1.8;
+	vs.length = 4.5;
+	vs.stationType = ldmmap::e_StationTypeLDM::StationType_LDM_passengerCar;
+	vs.x = 1.1;
+	vs.y = 2.2;
+	vs.speed = 10.0;
+	vs.heading = 45.0;
+	for(int i=0;i<num_vehicles;i++){
+		fbPtr->addCustom(&vs, get_timestamp_us());
+		vs.stationID++;
+		vs.x += 0.1;
+		vs.y += 0.1;
+		vs.heading += 0.5;
+	}
+}
+
+extern char **environ;
+pid_t uv_spawn_gnn(char *fifo_path, uint16_t pack_size, char *gnn_snapshot_path, char* gnn_csv_out_path) {
+	posix_spawn_file_actions_t fa;
+	posix_spawn_file_actions_init(&fa);
+
+	// ========= change working directory to gnn
+	int rc = posix_spawn_file_actions_addchdir_np(&fa, "gnn");
+	if (rc != 0) {
+        posix_spawn_file_actions_destroy(&fa);
+        return -1;
+    }
+
+	// ========= prepare arguments vector
+	std::vector<char*> argv;
+
+	// -- push back macros while transforming to char*
+	#define PB(strname) argv.push_back(strname);
+	#define PBC(strname,strval) char strname[] = strval; argv.push_back(strname);
+	#define PBCI(val,sz) char cstr_##val[sz]; sprintf(cstr_##val,"%d",val); PB(cstr_##val);
+
+	// -- push back the arguments
+    PBC(uv,"uv");
+	PBC(run,"run");
+	PBC(rcv_py_path,"rcv.py");
+	PBC(opt_f,"-f");
+	PB(fifo_path);
+	PBC(opt_p,"-p");
+	PBCI(pack_size,5);
+	PBC(opt_w,"-s");
+	PB(gnn_snapshot_path);
+	PBC(opt_o, "-O");
+	PB(gnn_csv_out_path);
+    PB(nullptr);
+
+
+	// ========= spawn the process
+	pid_t pid;
+    rc = posix_spawnp(
+        &pid,
+        "uv",
+        &fa,   // file actions
+        nullptr,   // spawn attrs
+        argv.data(),
+        environ
+    );
+
+	// ========= cleanup & error check
+	posix_spawn_file_actions_destroy(&fa);
+    if (rc != 0) {
+        // errno-style error check
+        return -1;
+    }
+
+    return pid;
+	#undef PB
+	#undef PBC
+	#undef PBCI
+}
+
+void *nnModelUpdater_callback(void* arg) {
+	// This function should periodically read from the database and update the neural network model
+
+	nnModelUpdaterOptions_t* opts = static_cast<nnModelUpdaterOptions_t*>(arg);
+	ldmmap::LDMMap* db_ptr = opts->db_ptr;
+
+	// create fifo pipe with mkfifo
+	int fifofd=-1;
+	std::string fifo_path = "/tmp/nn_mup_fifo" + std::to_string(getpid());
+	if (mkfifo(fifo_path.c_str(), 0660) < 0){
+		std::cerr << "[ERROR] Cannot create FIFO pipe for Neural Network Model Updater!" << std::endl;
+		terminatorFlag = true;
+		pthread_exit(nullptr);
+	}
+	else{
+		std::cout << "[INFO] FIFO pipe created at " << GREEN_ESCAPE << fifo_path << RESET_ESCAPE << " for Neural Network Model Updater." << std::endl;
+		// open fifo for writing
+		fifofd = open(fifo_path.c_str(), O_RDWR | O_NONBLOCK);
+		if (fifofd < 0) {
+			std::cerr << "[ERROR] Cannot open FIFO pipe for Neural Network Model Updater!" << std::endl;
+			// created but can't open, so unlink it
+			unlink(fifo_path.c_str());
+			terminatorFlag = true;
+			pthread_exit(nullptr);
+		}
+	}
+
+	// spawn the gnn model and attach it to the pipe
+	std::string gnn_relative_snapshot_path = std::string("../") + opts->gnn_snapshot_path;
+	std::string gnn_relative_csv_out_path = std::string("../") + opts->gnn_csv_out_path;
+	pid_t pygnn_pid = uv_spawn_gnn(const_cast<char*>(fifo_path.c_str()), opts->pack_size, const_cast<char*>(gnn_relative_snapshot_path.c_str()), const_cast<char*>(gnn_relative_csv_out_path.c_str()));
+	if (pygnn_pid < 0) {
+		std::cerr << "[ERROR] Cannot spawn the GNN model process for Neural Network Model Updater!" << std::endl;
+		close(fifofd);
+		unlink(fifo_path.c_str());
+		terminatorFlag = true;
+		pthread_exit(nullptr);
+	}
+	else {
+		std::cout << "[INFO] Spawned GNN model process with PID " << GREEN_ESCAPE << pygnn_pid << RESET_ESCAPE << " for Neural Network Model Updater." << std::endl;
+	}
+
+	// create frame object
+	auto central_lat_lon = db_ptr->getCentralLatLon();
+	FrameBuffer frameBuf(fifofd, opts->max_frame_size, central_lat_lon.first, central_lat_lon.second, opts->sumo_netoffset_x, opts->sumo_netoffset_y, 1);
+
+	// Create a new timer
+	Timer tmr(opts->period_ms);
+	std::cout << "[INFO] Neural Network Model Updater started. Updating every " << opts->period_ms << " milliseconds." << std::endl;
+	if(tmr.start()==false) {
+		std::cerr << "[ERROR] Fatal error! Cannot create timer for the Neural Network Model Updater thread!" << std::endl;
+		unlink(fifo_path.c_str());
+		terminatorFlag = true;
+		pthread_exit(nullptr);
+	}
+
+	POLL_DEFINE_JUNK_VARIABLE();
+
+	while (terminatorFlag == false && tmr.waitForExpiration()==true) {
+		// Implement the logic to read from the database and update the neural network model
+		// ---- These operations will be performed periodically ----
+		// Placeholder: print a message indicating the update operation
+
+		// get time for window reference
+		addVdToFrameArgs_t addVdArgs = {
+			.fbPtr = &frameBuf,
+			.reftime_ms = get_timestamp_ms_gn(),
+			.window_size_ms = opts->period_ms
+		};
+		db_ptr->executeOnAllVehicleContents(&addVdToFrame, static_cast<void *>(&addVdArgs));
+		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
+		// --------
+	}
+
+	if (!frameBuf.empty()) {
+		frameBuf.flushToFd(FrameBuffer::serialization_t::json);
+	}
+
+	if (terminatorFlag == true) {
+		std::cerr << "[WARN] Neural Network Model Updater terminated due to error." << std::endl;
+	}
+	close(fifofd);
+	unlink(fifo_path.c_str());
+	pthread_exit(nullptr);
+}
+
 int main(int argc, char **argv) {
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	terminatorFlag = false;
@@ -268,6 +472,9 @@ int main(int argc, char **argv) {
 	pthread_t vehviz_tid;
 	// Thread attributes (unused, for the time being)
 	// pthread_attr_t tattr;
+
+	pthread_t nn_updater_tid;
+	// thread periodically reading from db and updating nn model
 
 	// First of all, parse the options
 	options_t sldm_opts;
@@ -495,6 +702,36 @@ int main(int argc, char **argv) {
 	pthread_create(&vehviz_tid,NULL,VehVizUpdater_callback,(void *) &vizParams);
 	// pthread_attr_destroy(&tattr);
 
+	// third thread to read periodically from db and update python nn model
+	if (sldm_opts.gnn_trigger_enabled==true){
+		char *gnn_snapshot_path=nullptr;
+		if(options_string_len(sldm_opts.gnn_snapshot_path)>0)
+			gnn_snapshot_path=options_string_pop(sldm_opts.gnn_snapshot_path);
+
+		char *gnn_csv_out_path=nullptr;
+		if(options_string_len(sldm_opts.gnn_csv_out_path)>0)
+			gnn_csv_out_path=options_string_pop(sldm_opts.gnn_csv_out_path);
+		
+		nnModelUpdaterOptions_t nnMUP = {db_ptr, sldm_opts.gnn_step_len_ms, MAX_VEHICLES_PER_FRAME, sldm_opts.gnn_pack_size, gnn_snapshot_path, sldm_opts.gnn_sumo_netoffset_x, sldm_opts.gnn_sumo_netoffset_y, gnn_csv_out_path}; // every 100 ms, max frame size 2000 vehicles, 100 frames
+		pthread_create(&nn_updater_tid,NULL,nnModelUpdater_callback,(void *) &nnMUP);
+	}
+
+	// Get the log file name from the options, if available, to enable log mode inside the AMQP client and the S-LDM modules
+	std::string logfile_name="";
+	if(options_string_len(sldm_opts.logfile_name)>0) {
+		logfile_name=std::string(options_string_pop(sldm_opts.logfile_name));
+		if(logfile_name!="stdout") {
+			time_t rawtime;
+			struct tm * timeinfo;
+  			char buffer [25] = {NULL};
+  			time (&rawtime);	
+  			timeinfo = localtime (&rawtime);
+  			strftime (buffer,25,"-%Y%m%d-%H:%M:%S",timeinfo);
+			logfile_name += buffer;
+		}
+
+	}
+
 	// Create an indicatorTriggerManager object (the same object will be then accessed by all the AMQP clients, when using more than one client)
 	indicatorTriggerManager itm(db_ptr,&sldm_opts);
 
@@ -628,6 +865,9 @@ int main(int argc, char **argv) {
 
 	pthread_join(dbcleaner_tid,nullptr);
 	pthread_join(vehviz_tid,nullptr);
+	if (sldm_opts.gnn_trigger_enabled==true) {
+		pthread_join(nn_updater_tid,nullptr);
+	}
 
 	if(sldm_opts.num_amqp_x_enabled>0) {
 		fprintf(stdout,"[INFO] Terminating the other AMQP clients...\n");
