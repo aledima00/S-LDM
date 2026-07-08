@@ -57,7 +57,6 @@
 #define LONGOPT_gnn_snapshot_path "gnn-snapshot-path"
 #define LONGOPT_gnn_step_len "gnn-step-len"
 #define LONGOPT_gnn_pack_size "gnn-pack-size"
-#define LONGOPT_gnn_triggering_threshold "gnn-triggering-threshold"
 #define LONGOPT_gnn_sumo_netoffset "gnn-sumo-netoffset"
 #define LONGOPT_gnn_csv_out_path "gnn-csv-out-path"
 // The corresponding "val"s are used internally and they should be set as sequential integers starting from 256 (the range 320-399 should not be used as it is reserved to the AMQP broker long options)
@@ -76,9 +75,8 @@
 #define LONGOPT_gnn_snapshot_path_val 268
 #define LONGOPT_gnn_step_len_val 269
 #define LONGOPT_gnn_pack_size_val 270
-#define LONGOPT_gnn_triggering_threshold_val 271
-#define LONGOPT_gnn_sumo_netoffset_val 272
-#define LONGOPT_gnn_csv_out_path_val 273
+#define LONGOPT_gnn_sumo_netoffset_val 271
+#define LONGOPT_gnn_csv_out_path_val 272
 
 // AMQP broker (additional)
 #define LONGOPT_amqp_enable_additionals "amqp-enable-additionals"
@@ -149,7 +147,6 @@ static const struct option long_opts[]={
 	{LONGOPT_gnn_snapshot_path,				required_argument,	NULL, LONGOPT_gnn_snapshot_path_val},
 	{LONGOPT_gnn_step_len,				required_argument,	NULL, LONGOPT_gnn_step_len_val},
 	{LONGOPT_gnn_pack_size,				required_argument,	NULL, LONGOPT_gnn_pack_size_val},
-	{LONGOPT_gnn_triggering_threshold,				required_argument,	NULL, LONGOPT_gnn_triggering_threshold_val},
 	{LONGOPT_gnn_sumo_netoffset,				required_argument,	NULL, LONGOPT_gnn_sumo_netoffset_val},
 	{LONGOPT_gnn_csv_out_path,				required_argument,	NULL, LONGOPT_gnn_csv_out_path_val},
 
@@ -388,10 +385,6 @@ static const struct option long_opts[]={
 	"  --"LONGOPT_gnn_pack_size": <integer>: number of frames to pack together for each inference of the GNN model.\n"\
 	"\t  It must be greater or equal than 1 frame; default is "STRINGIFY(DEFAULT_GNN_PACK_SIZE)" (i.e. each sequence inferred is "STRINGIFY(DEFAULT_GNN_PACK_SIZE)" frames long).\n"
 
-#define OPT_gnn_triggering_threshold \
-	"  --"LONGOPT_gnn_triggering_threshold": <floating point number>: threshold used to determine whether to interpret output logits of the gnn models as triggers.\n"\
-	"\t  It must be between 0 and 1; default is "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)" (i.e. a logit is interpreted as a trigger if it is >= "STRINGIFY(DEFAULT_GNN_TRIGGERING_THRESHOLD)", otherwise it is not a trigger).\n"
-
 #define OPT_gnn_sumo_netoffset \
 	"  --"LONGOPT_gnn_sumo_netoffset": <string of comma-separated float values>: this offset is used in the conversion from Lat/Lon to SUMO x/y coordinates for the gnn model. The string should contain two comma-separated float values, where the first one is the offset to be applied to the x coordinate and the second one is the offset to be applied to the y coordinate. Default: \"0.0,0.0\" (i.e., no offset is applied).\n"
 
@@ -442,7 +435,6 @@ static void print_long_info(char *argv0) {
 		OPT_gnn_snapshot_path
 		OPT_gnn_step_len
 		OPT_gnn_pack_size
-		OPT_gnn_triggering_threshold
 		OPT_gnn_sumo_netoffset
 		OPT_gnn_csv_out_path
 		,
@@ -546,7 +538,6 @@ void options_initialize(struct options *options) {
 	options->gnn_snapshot_path=options_string_declare();
 	options->gnn_step_len_ms=DEFAULT_GNN_STEP_LEN_MS;
 	options->gnn_pack_size=DEFAULT_GNN_PACK_SIZE;
-	options->gnn_triggering_threshold=DEFAULT_GNN_TRIGGERING_THRESHOLD;
 	options->gnn_sumo_netoffset_x=0.0;
 	options->gnn_sumo_netoffset_y=0.0;
 	options->gnn_csv_out_path=options_string_declare();
@@ -865,19 +856,6 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 					print_short_info_err(options,argv[0]);
 				} else if(errno || options->gnn_pack_size<1) {
 					fprintf(stderr,"Error in parsing the pack size for the GNN model. Remember that it must be within [1,10000] frames.\n");
-					print_short_info_err(options,argv[0]);
-				}
-				break;
-			
-			case LONGOPT_gnn_triggering_threshold_val:
-				errno=0; // Setting errno to 0 as suggested in the strtod() man page
-				options->gnn_triggering_threshold=strtod(optarg,&sPtr);
-
-				if(sPtr==optarg) {
-					fprintf(stderr,"Cannot find any digit in the specified value (--" LONGOPT_gnn_triggering_threshold ").\n");
-					print_short_info_err(options,argv[0]);
-				} else if(errno || options->gnn_triggering_threshold<0.0 || options->gnn_triggering_threshold>1.0) {
-					fprintf(stderr,"Error in parsing the triggering threshold for the GNN model. Remember that it must be within [0.0,1.0].\n");
 					print_short_info_err(options,argv[0]);
 				}
 				break;
