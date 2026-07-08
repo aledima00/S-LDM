@@ -60,12 +60,22 @@ sudo apt install nodejs
 ```
 
 
-After installing the pre-requisites, you can clone this repository:
+After installing the pre-requisites, you can clone this repository.
+Since the S-LDM relies on two `git` submodules (`gnn` and `dataset-generator`, see the *GNN Trigger Concept* section below), the clone **should be recursive** in order to initialize and fetch them:
 ```
-git clone https://github.com/francescoraves483/S-LDM
+git clone --recursive https://github.com/francescoraves483/S-LDM
 cd S-LDM
 ```
-And build the S-LDM:
+
+To initialize and set up the submodules (pinned commit checkout + dependencies), run [`syncmodules.sh`](./syncmodules.sh).
+
+> If you previously cloned withtout a recursive repo, this script will be also initialize the submodules automatically!
+
+```
+./syncmodules.sh
+```
+
+Then build the S-LDM:
 ```
 make
 ```
@@ -140,6 +150,21 @@ The repository contains the following folders:
 - `src`, for all the .c and .cpp/.cc source files
 - `tester`, for a tester module, to be used in conjunction with [ms-van3t](https://github.com/marcomali/ms-van3t), with the aim of testing the S-LDM in the lab with emulated vehicles. This folder also includes a sample Python 3 REST server to mock any MEC service receiving data from the S-LDM REST client.
 - `vehicle-visualizer`, containing the C++ code for the communication between the main S-LDM process and the javascript server managing the vehicle visualizer (vehicle-visualizer is licensed under **GPLv2** and it is derived directly from [ms-van3t](https://github.com/marcomali/ms-van3t))
+
+# Synchronizing the submodules (`syncmodules.sh`)
+
+[`syncmodules.sh`](./syncmodules.sh) checks out the two submodules ([`gnn`](./gnn/), [`dataset-generator`](./dataset-generator/)) at the **commits pinned by the superproject** (it never follows the remote branch tip) and installs their dependencies. It also initializes them if missing (e.g. non-recursive clone).
+
+```
+./syncmodules.sh
+```
+
+In case it is necessary to advance a submodule to the latest upstream commit (and record the new pin in the S-LDM repo):
+```
+git submodule update --remote gnn            # or dataset-generator
+git add gnn && git commit -m "Bump gnn submodule"
+./syncmodules.sh
+```
 
 # GNN Trigger Concept
 
