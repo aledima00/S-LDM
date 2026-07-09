@@ -67,7 +67,7 @@ git clone --recursive https://github.com/francescoraves483/S-LDM
 cd S-LDM
 ```
 
-To initialize and set up the submodules (pinned commit checkout + dependencies), run [`syncmodules.sh`](./syncmodules.sh).
+To initialize and set up the submodules (pinned commit checkout + dependencies), run [`syncmodules.sh`](./syncmodules.sh). Note that since submodules are based on python venv managed with [`uv`](https://docs.astral.sh/uv/), the script also checks for the presence of the uv binary in the machine, and if not it suggest automatic installation to the user.
 
 > If you previously cloned withtout a recursive repo, this script will be also initialize the submodules automatically!
 
@@ -158,6 +158,9 @@ The repository contains the following folders:
 ```
 ./syncmodules.sh
 ```
+
+As mentioned [above](#compiling-the-s-ldm), the submodules are based on python `venv` managed with [`uv`](https://docs.astral.sh/uv/): thus the latter is a requirement, and, if not already present, the script already prompts the user to deal with installation automatically.
+For more detail about the installation and configuration of single submodules, please refer to their READMEs.
 
 In case it is necessary to advance a submodule to the latest upstream commit (and record the new pin in the S-LDM repo):
 ```
